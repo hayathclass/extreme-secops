@@ -543,6 +543,34 @@ async function createServer() {
       flagReason: 'Uncaught Promise rejection in user browser session'
     });
   });
+
+  // 5. Capture Real User Interactions & Activities (Buttons, Tools, State changes)
+  var lastClickTs = 0;
+  document.addEventListener('click', function(e) {
+    try {
+      var el = e.target;
+      var interactive = el.closest ? el.closest('button, a, input, select, textarea, [role="button"], [tabindex]') : null;
+      if (!interactive) return;
+
+      var now = Date.now();
+      if (now - lastClickTs < 500) return; // Debounce rapid spam
+      lastClickTs = now;
+
+      var label = (interactive.innerText || interactive.getAttribute('aria-label') || interactive.title || interactive.id || interactive.tagName || 'Action').trim();
+      label = label.replace(/\\s+/g, ' ').slice(0, 60) || 'Simulator Action';
+
+      transmit({
+        method: 'POST',
+        endpoint: window.location.pathname || '/',
+        status: 200,
+        eventType: 'USER_INTERACTION',
+        severity: 'NORMAL',
+        latencyMs: 14,
+        payloadSnippet: 'Interaction: ' + label,
+        flagReason: 'Active visitor performed: "' + label + '" on ' + (window.location.pathname || '/')
+      });
+    } catch(ign) {}
+  }, true);
 })();`;
 
     res.send(script);
@@ -874,15 +902,7 @@ async function createServer() {
       },
     };
 
-    realEventsBuffer.unshift(probeLog);
-    if (realEventsBuffer.length > 3000) realEventsBuffer.length = 3000;
-
-    // Broadcast to SSE clients
-    sseClients.forEach((client) => {
-      if (!client.targetId || client.targetId === probeLog.targetId) {
-        client.res.write(`data: ${JSON.stringify(probeLog)}\n\n`);
-      }
-    });
+    // Probes update health metrics only; they do not pollute visitor activity logs
 
     res.json({
       success: true,
@@ -1206,14 +1226,7 @@ async function createServer() {
       },
     };
 
-    realEventsBuffer.unshift(probeLog);
-    if (realEventsBuffer.length > 3000) realEventsBuffer.length = 3000;
-
-    sseClients.forEach((client) => {
-      if (!client.targetId || client.targetId === probeLog.targetId) {
-        client.res.write(`data: ${JSON.stringify(probeLog)}\n\n`);
-      }
-    });
+    // Probes update health metrics only; do not add to visitor activity logs
 
     res.json({
       success: true,

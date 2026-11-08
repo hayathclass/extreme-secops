@@ -531,7 +531,7 @@ class SecurityStore {
       };
     }
 
-    this.ingestLogs(targetId, [finalLog]);
+    // Target health & latency are updated, but automated probes do not generate user activity logs.
     this.notify();
     return finalLog;
   }

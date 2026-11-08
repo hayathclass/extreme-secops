@@ -27,6 +27,7 @@ import {
   Smartphone,
   Laptop,
   Trash2,
+  Ban,
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -402,8 +403,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
               <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-400 mt-0.5">
                 {activeVisitors.slice(0, 3).map((p, i) => (
-                  <span key={p.id || `${p.ip}-${p.device}-${i}`} className="bg-black/50 px-2 py-0.5 rounded text-cyan-300 border border-slate-800">
+                  <span
+                    key={p.id || `${p.ip}-${p.device}-${i}`}
+                    className={`px-2 py-0.5 rounded border text-[11px] font-mono flex items-center gap-1 ${
+                      p.isBlocked
+                        ? 'bg-rose-950/70 text-rose-300 border-rose-600'
+                        : 'bg-black/50 text-cyan-300 border-slate-800'
+                    }`}
+                  >
+                    {p.isBlocked ? <Ban className="w-2.5 h-2.5 text-rose-400" /> : null}
                     Person {i + 1}: {p.ip} ({p.device})
+                    {p.isBlocked && <span className="text-[9px] uppercase font-bold text-rose-400 ml-0.5">Blocked</span>}
                   </span>
                 ))}
                 {activeVisitors.length > 3 && (

@@ -139,6 +139,7 @@ export interface Target {
 
 export interface VisitorPerson {
   id?: string;
+  visitorId?: string;
   ip: string;
   device: string;
   country?: string;
@@ -152,6 +153,17 @@ export interface VisitorPerson {
   isSimulated?: boolean;
   isOnline?: boolean;
   leftAt?: string;
+  isBlocked?: boolean;
+  blockedReason?: string;
+}
+
+export interface BlockedEntity {
+  id: string;
+  ip?: string;
+  visitorId?: string;
+  targetId: string;
+  blockedAt: string;
+  reason?: string;
 }
 
 export interface ThreatDetection {

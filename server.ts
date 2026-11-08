@@ -66,6 +66,29 @@ export interface RealEvent {
 const realEventsBuffer: RealEvent[] = [];
 let sseClients: { id: string; targetId?: string; res: express.Response }[] = [];
 
+export interface BlockedEntity {
+  id: string;
+  ip?: string;
+  visitorId?: string;
+  targetId: string;
+  blockedAt: string;
+  reason?: string;
+}
+
+const blockedEntities: BlockedEntity[] = [];
+
+function checkIsBlocked(targetId: string = '', ip: string = '', visitorId?: string): { blocked: boolean; reason?: string } {
+  const cleanIp = (ip || '').replace(/^::ffff:/, '').trim();
+  const cleanVid = (visitorId || '').trim();
+  const match = blockedEntities.find((b) => {
+    if (b.targetId && targetId && b.targetId !== targetId && b.targetId !== 'all') return false;
+    if (cleanVid && b.visitorId && b.visitorId === cleanVid) return true;
+    if (cleanIp && b.ip && b.ip === cleanIp) return true;
+    return false;
+  });
+  return { blocked: Boolean(match), reason: match?.reason };
+}
+
 // Helper: Timeout wrapper
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
   return Promise.race([
@@ -595,6 +618,72 @@ async function createServer() {
     visitorDeviceId = 'dev-' + Math.random().toString(36).substring(2, 9);
   }
 
+  var blockPollTimer = null;
+  function displayBlockScreen(reason, ip) {
+    if (document.getElementById('extreme-secops-block-wall')) return;
+    var wall = document.createElement('div');
+    wall.id = 'extreme-secops-block-wall';
+    wall.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483647;background:#06090e;color:#e2e8f0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,Consolas,monospace;padding:24px;box-sizing:border-box;text-align:center;';
+    wall.innerHTML = '<div style="max-width:540px;background:rgba(15,23,42,0.95);border:1px solid #f43f5e;border-radius:16px;padding:32px;box-shadow:0 0 60px rgba(244,63,94,0.35);">'
+      + '<div style="font-size:42px;margin-bottom:12px;">🚫</div>'
+      + '<div style="color:#f43f5e;font-size:13px;font-weight:bold;letter-spacing:2px;margin-bottom:8px;">ACCESS DENIED // 403 FORBIDDEN</div>'
+      + '<h1 style="color:#ffffff;font-size:22px;margin:0 0 16px 0;font-weight:800;">DEVICE ACCESS SUSPENDED</h1>'
+      + '<p style="color:#94a3b8;font-size:13px;line-height:1.6;margin-bottom:18px;">Your device and network IP <span style="color:#00f0ff;font-weight:bold;">[' + (ip || cachedClientIp || 'Client') + ']</span> have been blocked from interacting with this website by the EXTREME SecOps Administrator.</p>'
+      + '<div style="background:#090d16;border:1px solid #1e293b;border-radius:8px;padding:12px;font-size:12px;color:#f87171;margin-bottom:18px;">WAF Policy: ' + (reason || 'Manual Administrator Block') + '</div>'
+      + '<div style="font-size:11px;color:#64748b;font-family:monospace;">EXTREME SEC-OPS WAF ENGINE • SHIELD ACTIVE</div>'
+      + '</div>';
+    document.body.appendChild(wall);
+    document.body.style.overflow = 'hidden';
+
+    // Start background poller so unblocking in dashboard automatically removes this screen!
+    if (!blockPollTimer) {
+      blockPollTimer = setInterval(function() {
+        fetch('${baseUrl}/api/collector/my-ip?targetId=' + encodeURIComponent(targetId) + '&visitorId=' + encodeURIComponent(visitorDeviceId))
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (d && !d.isBlocked) {
+              removeBlockScreen();
+            }
+          }).catch(function() {});
+      }, 3000);
+    }
+  }
+
+  function removeBlockScreen() {
+    var wall = document.getElementById('extreme-secops-block-wall');
+    if (wall && wall.parentNode) {
+      wall.parentNode.removeChild(wall);
+    }
+    document.body.style.overflow = '';
+    if (blockPollTimer) {
+      clearInterval(blockPollTimer);
+      blockPollTimer = null;
+    }
+  }
+
+  // Connect to SSE stream for sub-second instant real-time block and unblock enforcement
+  try {
+    if (window.EventSource) {
+      var sseBlockStream = new EventSource('${baseUrl}/api/collector/stream');
+      sseBlockStream.onmessage = function(e) {
+        try {
+          var d = JSON.parse(e.data);
+          if (d.type === 'BLOCKED') {
+            var myCleanIp = (cachedClientIp || '').replace(/^::ffff:/, '').trim();
+            if ((d.blockRecord?.ip && d.blockRecord.ip === myCleanIp) || (d.blockRecord?.visitorId && d.blockRecord.visitorId === visitorDeviceId)) {
+              displayBlockScreen(d.blockRecord?.reason, cachedClientIp);
+            }
+          } else if (d.type === 'UNBLOCKED') {
+            var myCleanIp = (cachedClientIp || '').replace(/^::ffff:/, '').trim();
+            if ((d.ip && d.ip === myCleanIp) || (d.visitorId && d.visitorId === visitorDeviceId)) {
+              removeBlockScreen();
+            }
+          }
+        } catch(err) {}
+      };
+    }
+  } catch(err) {}
+
   function transmit(data) {
     // If user has exited/closed tab, do not transmit trailing background fetches or stream packets
     if (leaveReported && data.eventType !== 'SESSION_END') {
@@ -622,6 +711,16 @@ async function createServer() {
           headers: { 'Content-Type': 'application/json' },
           body: body,
           keepalive: true
+        }).then(function(res) {
+          if (res.status === 403) {
+            return res.json().then(function(d) {
+              if (d && d.blocked) {
+                displayBlockScreen(d.reason, d.ip || cachedClientIp);
+              }
+            }).catch(function() {
+              displayBlockScreen('Administrator WAF Block Policy', cachedClientIp);
+            });
+          }
         }).catch(function() {
           if (navigator.sendBeacon) {
             navigator.sendBeacon(ingestUrl, body);
@@ -672,9 +771,12 @@ async function createServer() {
 
   // 1. Direct Extreme SecOps IP detection endpoint (works across all browsers, zero adblock blocks)
   try {
-    fetch('${baseUrl}/api/collector/my-ip')
+    fetch('${baseUrl}/api/collector/my-ip?targetId=' + encodeURIComponent(targetId) + '&visitorId=' + encodeURIComponent(visitorDeviceId))
       .then(function(r) { return r.json(); })
       .then(function(d) {
+        if (d && d.isBlocked) {
+          displayBlockScreen(d.blockedReason, d.ip || cachedClientIp);
+        }
         if (d && d.ip && d.ip !== '127.0.0.1' && d.ip !== '::1') {
           applyResolvedIp(d.ip);
         } else {
@@ -1594,7 +1696,107 @@ async function createServer() {
     clientIp = clientIp.replace(/^::ffff:/, '').trim();
 
     const country = (req.headers['cf-ipcountry'] as string) || undefined;
-    res.json({ ip: clientIp, country });
+    const targetId = (req.query.targetId as string) || 'target-atc-simulator';
+    const visitorId = (req.query.visitorId as string) || '';
+    const blockCheck = checkIsBlocked(targetId, clientIp, visitorId);
+
+    res.json({
+      ip: clientIp,
+      country,
+      isBlocked: blockCheck.blocked,
+      blockedReason: blockCheck.reason,
+    });
+  });
+
+  // WAF: Query Blocked Entities
+  app.get('/api/collector/blocked', (req, res) => {
+    const targetId = (req.query.targetId as string) || '';
+    const list = blockedEntities.filter((b) => !targetId || b.targetId === targetId || b.targetId === 'all');
+    res.json({ success: true, blockedList: list });
+  });
+
+  // WAF: Block IP or Device
+  app.post('/api/collector/block', (req, res) => {
+    const { targetId = 'target-atc-simulator', ip, visitorId, reason = 'Blocked by SecOps Administrator' } = req.body || {};
+    const cleanIp = (ip || '').replace(/^::ffff:/, '').trim();
+    const cleanVid = (visitorId || '').trim();
+
+    if (!cleanIp && !cleanVid) {
+      return res.status(400).json({ error: 'Missing ip or visitorId to block' });
+    }
+
+    const entityId = cleanVid ? `${cleanIp || 'unknown'}::${cleanVid}` : cleanIp;
+    const existingIndex = blockedEntities.findIndex((b) => b.id === entityId || (cleanIp && b.ip === cleanIp));
+    const blockRecord: BlockedEntity = {
+      id: entityId,
+      ip: cleanIp || undefined,
+      visitorId: cleanVid || undefined,
+      targetId,
+      blockedAt: new Date().toISOString(),
+      reason,
+    };
+
+    if (existingIndex >= 0) {
+      blockedEntities[existingIndex] = blockRecord;
+    } else {
+      blockedEntities.push(blockRecord);
+    }
+
+    // Inject critical alert in live log buffer
+    const alertEvent: RealEvent = {
+      id: `waf-block-rule-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+      targetId,
+      timestamp: new Date().toISOString(),
+      displayTime: new Date().toTimeString().slice(0, 8),
+      method: 'POST',
+      endpoint: '/waf/block-rule',
+      status: 403,
+      sourceIp: cleanIp || 'Device',
+      userAgent: 'EXTREME-SecOps-WAF/3.0',
+      eventType: 'THREAT_ALERT',
+      severity: 'CRITICAL',
+      latencyMs: 8,
+      isLab: false,
+      logSource: 'REAL_LIVE_INGEST',
+      flagReason: `🚫 WAF RULE ENFORCED: Administrator blocked access for ${cleanIp || cleanVid} (${reason})`,
+      clientGeo: {
+        device: 'WAF Firewall Rule',
+        visitorId: cleanVid || undefined,
+      },
+    };
+    realEventsBuffer.unshift(alertEvent);
+    if (realEventsBuffer.length > 3000) realEventsBuffer.length = 3000;
+
+    // Broadcast via SSE to all connected dashboards and client sessions
+    sseClients.forEach((client) => {
+      client.res.write(`data: ${JSON.stringify({ type: 'BLOCKED', blockRecord, alertEvent })}\n\n`);
+    });
+
+    res.json({ success: true, blocked: true, blockRecord });
+  });
+
+  // WAF: Unblock IP or Device
+  app.post('/api/collector/unblock', (req, res) => {
+    const { targetId = 'target-atc-simulator', ip, visitorId } = req.body || {};
+    const cleanIp = (ip || '').replace(/^::ffff:/, '').trim();
+    const cleanVid = (visitorId || '').trim();
+
+    for (let i = blockedEntities.length - 1; i >= 0; i--) {
+      const b = blockedEntities[i];
+      const matchTarget = !targetId || b.targetId === targetId || b.targetId === 'all';
+      const matchIp = cleanIp && b.ip === cleanIp;
+      const matchVid = cleanVid && b.visitorId === cleanVid;
+      if (matchTarget && (matchIp || matchVid)) {
+        blockedEntities.splice(i, 1);
+      }
+    }
+
+    // Broadcast UNBLOCKED via SSE
+    sseClients.forEach((client) => {
+      client.res.write(`data: ${JSON.stringify({ type: 'UNBLOCKED', ip: cleanIp, visitorId: cleanVid })}\n\n`);
+    });
+
+    res.json({ success: true, unblocked: true, remaining: blockedEntities.length });
   });
 
   // Real HTTP Event Ingestion endpoint with Robust Real Client IP Extraction
@@ -1662,6 +1864,47 @@ async function createServer() {
     const targetId = body.targetId || (req.headers['x-target-id'] as string) || 'target-atc-simulator';
     const method = (body.method || 'GET').toUpperCase();
     const endpoint = body.endpoint || body.path || '/';
+
+    // WAF Access Enforcement Check: Blocked Devices & IPs are immediately rejected
+    const blockCheck = checkIsBlocked(targetId, determinedIp, body.visitorId);
+    if (blockCheck.blocked) {
+      const blockEvent: RealEvent = {
+        id: `waf-block-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+        targetId,
+        timestamp: new Date().toISOString(),
+        displayTime: new Date().toTimeString().slice(0, 8),
+        method,
+        endpoint,
+        status: 403,
+        sourceIp: determinedIp,
+        userAgent,
+        eventType: 'THREAT_ALERT',
+        severity: 'CRITICAL',
+        latencyMs: 8,
+        isLab: false,
+        logSource: 'REAL_LIVE_INGEST',
+        flagReason: `🚫 WAF BLOCKED: Prohibited request attempt from ${determinedIp} (${deviceType})`,
+        clientGeo: {
+          device: deviceType,
+          visitorId: (body.visitorId as string) || undefined,
+          country: (req.headers['cf-ipcountry'] as string) || (body.country as string) || undefined,
+        },
+      };
+      realEventsBuffer.unshift(blockEvent);
+      if (realEventsBuffer.length > 3000) realEventsBuffer.length = 3000;
+      sseClients.forEach((client) => {
+        client.res.write(`data: ${JSON.stringify(blockEvent)}\n\n`);
+      });
+
+      return res.status(403).json({
+        blocked: true,
+        ip: determinedIp,
+        error: 'Access Denied: Your IP or device has been blocked by EXTREME SecOps WAF',
+        reason: blockCheck.reason || 'SecOps Administrator Manual Block',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     const status = typeof body.status === 'number' ? body.status : 200;
     const latencyMs = typeof body.latencyMs === 'number' ? body.latencyMs : Math.floor(Math.random() * 20) + 14;
     const eventType = body.eventType || (status === 401 ? 'AUTHENTICATION' : endpoint.startsWith('/api') ? 'API_REQUEST' : 'PAGEVIEW');
@@ -1808,8 +2051,10 @@ async function createServer() {
         leftAt = sessionEndEvent?.timestamp || (latestActiveEvent ? latestActiveEvent.timestamp : latestEvent.timestamp);
       }
 
+      const blockCheck = checkIsBlocked(targetId, ip, events[0]?.clientGeo?.visitorId);
       visitorMap.set(deviceKey, {
         id: deviceKey,
+        visitorId: events[0]?.clientGeo?.visitorId,
         ip,
         device: latestEvent.clientGeo?.device || parseDeviceDetails(latestEvent.userAgent),
         country: latestEvent.clientGeo?.country,
@@ -1822,6 +2067,8 @@ async function createServer() {
         userAgent: latestEvent.userAgent,
         isOnline,
         leftAt,
+        isBlocked: blockCheck.blocked,
+        blockedReason: blockCheck.reason,
       });
     });
 
@@ -1959,6 +2206,81 @@ async function createServer() {
     var dev = detectClientDev();
     document.getElementById('devType').textContent = dev;
 
+    var visitorDeviceId = '';
+    try {
+      visitorDeviceId = localStorage.getItem('ext_sec_device_id') || '';
+      if (!visitorDeviceId) {
+        visitorDeviceId = 'dev-' + Math.random().toString(36).substring(2, 9) + '-' + Date.now().toString(36);
+        localStorage.setItem('ext_sec_device_id', visitorDeviceId);
+      }
+    } catch(e) {
+      visitorDeviceId = 'dev-' + Math.random().toString(36).substring(2, 9);
+    }
+
+    var blockPollTimer = null;
+    function displayBlockScreen(reason, ip) {
+      if (document.getElementById('extreme-secops-block-wall')) return;
+      var wall = document.createElement('div');
+      wall.id = 'extreme-secops-block-wall';
+      wall.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483647;background:#06090e;color:#e2e8f0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,Consolas,monospace;padding:24px;box-sizing:border-box;text-align:center;';
+      wall.innerHTML = '<div style="max-width:540px;background:rgba(15,23,42,0.95);border:1px solid #f43f5e;border-radius:16px;padding:32px;box-shadow:0 0 60px rgba(244,63,94,0.35);">'
+        + '<div style="font-size:42px;margin-bottom:12px;">🚫</div>'
+        + '<div style="color:#f43f5e;font-size:13px;font-weight:bold;letter-spacing:2px;margin-bottom:8px;">ACCESS DENIED // 403 FORBIDDEN</div>'
+        + '<h1 style="color:#ffffff;font-size:22px;margin:0 0 16px 0;font-weight:800;">DEVICE ACCESS SUSPENDED</h1>'
+        + '<p style="color:#94a3b8;font-size:13px;line-height:1.6;margin-bottom:18px;">Your device and network IP <span style="color:#00f0ff;font-weight:bold;">[' + (ip || publicIp || 'Client') + ']</span> have been blocked from interacting with this website by the EXTREME SecOps Administrator.</p>'
+        + '<div style="background:#090d16;border:1px solid #1e293b;border-radius:8px;padding:12px;font-size:12px;color:#f87171;margin-bottom:18px;">WAF Policy: ' + (reason || 'Manual Administrator Block') + '</div>'
+        + '<div style="font-size:11px;color:#64748b;font-family:monospace;">EXTREME SEC-OPS WAF ENGINE • SHIELD ACTIVE</div>'
+        + '</div>';
+      document.body.appendChild(wall);
+      document.body.style.overflow = 'hidden';
+
+      if (!blockPollTimer) {
+        blockPollTimer = setInterval(function() {
+          fetch('${baseUrl}/api/collector/my-ip?targetId=' + encodeURIComponent('${targetId}') + '&visitorId=' + encodeURIComponent(visitorDeviceId))
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+              if (d && !d.isBlocked) {
+                removeBlockScreen();
+              }
+            }).catch(function() {});
+        }, 3000);
+      }
+    }
+
+    function removeBlockScreen() {
+      var wall = document.getElementById('extreme-secops-block-wall');
+      if (wall && wall.parentNode) {
+        wall.parentNode.removeChild(wall);
+      }
+      document.body.style.overflow = '';
+      if (blockPollTimer) {
+        clearInterval(blockPollTimer);
+        blockPollTimer = null;
+      }
+    }
+
+    try {
+      if (window.EventSource) {
+        var sse = new EventSource('${baseUrl}/api/collector/stream');
+        sse.onmessage = function(e) {
+          try {
+            var d = JSON.parse(e.data);
+            if (d.type === 'BLOCKED') {
+              var cleanP = (publicIp || '').replace(/^::ffff:/, '').trim();
+              if ((d.blockRecord?.ip && d.blockRecord.ip === cleanP) || (d.blockRecord?.visitorId && d.blockRecord.visitorId === visitorDeviceId)) {
+                displayBlockScreen(d.blockRecord?.reason, cleanP);
+              }
+            } else if (d.type === 'UNBLOCKED') {
+              var cleanP = (publicIp || '').replace(/^::ffff:/, '').trim();
+              if ((d.ip && d.ip === cleanP) || (d.visitorId && d.visitorId === visitorDeviceId)) {
+                removeBlockScreen();
+              }
+            }
+          } catch(err) {}
+        };
+      }
+    } catch(err) {}
+
     function sendHit(endpoint, status, eventType, flagReason) {
       if (!isConnected && eventType !== 'PAGEVIEW') return;
       hits++;
@@ -1968,6 +2290,7 @@ async function createServer() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           targetId: '${targetId}',
+          visitorId: visitorDeviceId,
           endpoint: endpoint,
           method: endpoint.startsWith('/api') ? 'POST' : 'GET',
           status: status || 200,
@@ -1977,7 +2300,14 @@ async function createServer() {
           userAgent: navigator.userAgent,
           flagReason: flagReason || ('Real user navigated ' + endpoint)
         })
-      }).then(function() {
+      }).then(function(res) {
+        if (res.status === 403) {
+          return res.json().then(function(d) {
+            displayBlockScreen(d.reason || 'SecOps Administrator WAF Block Policy', publicIp);
+          }).catch(function() {
+            displayBlockScreen('SecOps Administrator WAF Block Policy', publicIp);
+          });
+        }
         document.getElementById('statusMsg').textContent = '✓ Live Event: ' + (eventType || 'PAGEVIEW') + ' (' + endpoint + ')';
         setTimeout(function() { document.getElementById('statusMsg').textContent = ''; }, 2500);
       });
@@ -1998,6 +2328,7 @@ async function createServer() {
 
       var exitPayload = JSON.stringify({
         targetId: '${targetId}',
+        visitorId: visitorDeviceId,
         timestamp: new Date().toISOString(),
         url: window.location.href,
         path: window.location.pathname || '/',
@@ -2073,9 +2404,12 @@ async function createServer() {
       }
     });
 
-    fetch('${baseUrl}/api/collector/my-ip')
+    fetch('${baseUrl}/api/collector/my-ip?targetId=' + encodeURIComponent('${targetId}') + '&visitorId=' + encodeURIComponent(visitorDeviceId))
       .then(function(r) { return r.json(); })
       .then(function(d) {
+        if (d && d.isBlocked) {
+          displayBlockScreen(d.blockedReason, d.ip || publicIp);
+        }
         if (d && d.ip && d.ip !== '127.0.0.1' && d.ip !== '::1') {
           publicIp = d.ip;
           document.getElementById('ipVal').textContent = d.ip;

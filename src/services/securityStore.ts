@@ -12,6 +12,7 @@ import {
   LogSource,
   TelemetryMode,
   VisitorPerson,
+  BlockedEntity,
 } from '../types/security';
 
 class SecurityStore {
@@ -26,6 +27,7 @@ class SecurityStore {
   private streamTick = 0;
   private lastFetchedEventTime: string = new Date(Date.now() - 3600000).toISOString();
   private isPollingCollector = false;
+  private blockedList: BlockedEntity[] = [];
 
   constructor() {
     this.initDefaultData();
@@ -192,6 +194,22 @@ class SecurityStore {
                   }
                   return;
                 }
+                if (data && data.type === 'BLOCKED' && data.blockRecord) {
+                  if (!this.blockedList.some((b) => b.id === data.blockRecord.id)) {
+                    this.blockedList.push(data.blockRecord);
+                  }
+                  if (data.alertEvent) {
+                    const activeId = this.activeTargetId || (this.targets[0] ? this.targets[0].id : null);
+                    this.ingestLogs(activeId || 'target-atc-simulator', [data.alertEvent]);
+                  }
+                  this.notify();
+                  return;
+                }
+                if (data && data.type === 'UNBLOCKED') {
+                  this.blockedList = this.blockedList.filter((b) => b.ip !== data.ip && b.visitorId !== data.visitorId);
+                  this.notify();
+                  return;
+                }
                 if (data && data.id && data.sourceIp) {
                   const activeId = this.activeTargetId || (this.targets[0] ? this.targets[0].id : null);
                   const targetId = (data.targetId && this.getTarget(data.targetId)) ? data.targetId : activeId;
@@ -340,8 +358,12 @@ class SecurityStore {
         leftAt = sessionEndEvent?.timestamp || (latestActiveEvent ? latestActiveEvent.timestamp : latestEvent.timestamp);
       }
 
+      const isBlocked = this.isVisitorBlocked(ip, events[0]?.clientGeo?.visitorId);
+      const blockedRecord = this.blockedList.find((b) => b.ip === ip || (events[0]?.clientGeo?.visitorId && b.visitorId === events[0].clientGeo.visitorId));
+
       map.set(deviceKey, {
         id: deviceKey,
+        visitorId: events[0]?.clientGeo?.visitorId,
         ip,
         device: latestEvent.clientGeo?.device || this.parseDeviceFromUserAgent(latestEvent.userAgent),
         country: latestEvent.clientGeo?.country,
@@ -355,6 +377,8 @@ class SecurityStore {
         isSimulated: isSim,
         isOnline,
         leftAt,
+        isBlocked,
+        blockedReason: blockedRecord?.reason,
       });
     });
 
@@ -363,6 +387,82 @@ class SecurityStore {
       if (!a.isOnline && b.isOnline) return 1;
       return new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime();
     });
+  }
+
+  public isVisitorBlocked(ip: string, visitorId?: string): boolean {
+    const cleanIp = (ip || '').replace(/^::ffff:/, '').trim();
+    const cleanVid = (visitorId || '').trim();
+    return this.blockedList.some((b) => {
+      if (cleanVid && b.visitorId && b.visitorId === cleanVid) return true;
+      if (cleanIp && b.ip && b.ip === cleanIp) return true;
+      return false;
+    });
+  }
+
+  public getBlockedVisitors(): BlockedEntity[] {
+    return [...this.blockedList];
+  }
+
+  public async blockVisitor(targetId: string, ip: string, visitorId?: string, reason = 'Blocked by SecOps Administrator'): Promise<boolean> {
+    const cleanIp = (ip || '').replace(/^::ffff:/, '').trim();
+    const cleanVid = (visitorId || '').trim();
+    const entityId = cleanVid ? `${cleanIp || 'device'}::${cleanVid}` : cleanIp;
+
+    const record: BlockedEntity = {
+      id: entityId,
+      ip: cleanIp || undefined,
+      visitorId: cleanVid || undefined,
+      targetId,
+      blockedAt: new Date().toISOString(),
+      reason,
+    };
+
+    if (!this.blockedList.some((b) => b.id === entityId || (cleanIp && b.ip === cleanIp))) {
+      this.blockedList.push(record);
+      this.notify();
+    }
+
+    try {
+      await fetch('/api/collector/block', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetId, ip: cleanIp, visitorId: cleanVid, reason }),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  public async unblockVisitor(targetId: string, ip: string, visitorId?: string): Promise<boolean> {
+    const cleanIp = (ip || '').replace(/^::ffff:/, '').trim();
+    const cleanVid = (visitorId || '').trim();
+
+    this.blockedList = this.blockedList.filter((b) => b.ip !== cleanIp && b.visitorId !== cleanVid && b.id !== cleanIp);
+    this.notify();
+
+    try {
+      await fetch('/api/collector/unblock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetId, ip: cleanIp, visitorId: cleanVid }),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  public async syncBlockedList(targetId?: string): Promise<BlockedEntity[]> {
+    try {
+      const res = await fetch(`/api/collector/blocked?targetId=${encodeURIComponent(targetId || '')}`);
+      const data = await res.json();
+      if (data && data.blockedList) {
+        this.blockedList = data.blockedList;
+        this.notify();
+      }
+    } catch {}
+    return this.blockedList;
   }
 
   public parseDeviceFromUserAgent(ua: string = ''): string {

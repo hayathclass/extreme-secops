@@ -17,6 +17,9 @@ import {
   Zap,
   Globe,
   ShieldCheck,
+  ShieldAlert,
+  Ban,
+  Unlock,
   Code2,
   Activity,
   Send,
@@ -165,8 +168,37 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
   // Unique visitor persons based on distinct client IPs and device metadata
   const visitorPersons = target ? securityStore.getVisitorPersons(target.id) : [];
   const activeVisitors = visitorPersons.filter((p) => p.isOnline);
+  const blockedVisitors = visitorPersons.filter((p) => p.isBlocked);
   const hostOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   const mobileTestUrl = `${hostOrigin}/api/collector/test-visit?targetId=${target?.id || 'target-atc-simulator'}`;
+
+  const [blockingTarget, setBlockingTarget] = useState<string | null>(null);
+
+  const handleBlockVisitor = async (person: VisitorPerson) => {
+    if (!target) return;
+    const key = person.id || person.ip;
+    setBlockingTarget(key);
+    try {
+      await securityStore.blockVisitor(target.id, person.ip, person.visitorId, 'Blocked by SecOps Administrator');
+    } catch (e) {
+      console.error('Failed to block visitor:', e);
+    } finally {
+      setBlockingTarget(null);
+    }
+  };
+
+  const handleUnblockVisitor = async (person: VisitorPerson) => {
+    if (!target) return;
+    const key = person.id || person.ip;
+    setBlockingTarget(key);
+    try {
+      await securityStore.unblockVisitor(target.id, person.ip, person.visitorId);
+    } catch (e) {
+      console.error('Failed to unblock visitor:', e);
+    } finally {
+      setBlockingTarget(null);
+    }
+  };
 
   const copyIpAddress = (ip: string) => {
     navigator.clipboard.writeText(ip);
@@ -331,6 +363,12 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
                     <span>0 Online ({visitorPersons.length} Total Seen)</span>
                   </span>
                 )}
+                {blockedVisitors.length > 0 && (
+                  <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-rose-950/90 text-rose-300 border border-rose-500/50 shadow-sm animate-pulse">
+                    <Ban className="w-3 h-3 text-rose-400" />
+                    <span>{blockedVisitors.length} WAF Blocked</span>
+                  </span>
+                )}
               </div>
             </div>
             <p className="text-xs text-slate-400">
@@ -399,26 +437,44 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
             {visitorPersons.map((person, idx) => (
               <div
                 key={person.id || `${person.ip}-${person.device}-${idx}`}
-                className={`bg-slate-900/90 border rounded-xl p-3.5 space-y-2.5 transition shadow-md relative overflow-hidden ${
-                  person.isOnline ? 'border-slate-800 hover:border-emerald-500/50 shadow-emerald-950/20' : 'border-slate-800/60 opacity-80 hover:opacity-100'
+                className={`border rounded-xl p-3.5 space-y-2.5 transition shadow-md relative overflow-hidden ${
+                  person.isBlocked
+                    ? 'bg-rose-950/25 border-rose-600/80 shadow-rose-950/40 ring-1 ring-rose-500/30'
+                    : person.isOnline
+                    ? 'bg-slate-900/90 border-slate-800 hover:border-emerald-500/50 shadow-emerald-950/20'
+                    : 'bg-slate-900/90 border-slate-800/60 opacity-80 hover:opacity-100'
                 }`}
               >
                 {/* Person Header */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
-                    <span className="w-6 h-6 rounded-md bg-cyan-950 text-cyan-300 border border-cyan-800 flex items-center justify-center text-xs font-mono font-bold">
+                    <span className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-mono font-bold ${
+                      person.isBlocked
+                        ? 'bg-rose-950 text-rose-300 border border-rose-800'
+                        : 'bg-cyan-950 text-cyan-300 border border-cyan-800'
+                    }`}>
                       #{idx + 1}
                     </span>
                     <span className="text-xs font-bold text-slate-200">
                       Person {idx + 1}
                     </span>
-                    {person.isSimulated && (
+                    {person.isBlocked ? (
+                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-rose-900/80 text-rose-200 border border-rose-600 flex items-center gap-1">
+                        <Ban className="w-2.5 h-2.5" />
+                        BLOCKED
+                      </span>
+                    ) : person.isSimulated ? (
                       <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800">
                         Test Device
                       </span>
-                    )}
+                    ) : null}
                   </div>
-                  {person.isOnline ? (
+                  {person.isBlocked ? (
+                    <div className="flex items-center space-x-1 text-[11px] font-mono font-bold text-rose-400 bg-rose-950/80 px-2 py-0.5 rounded border border-rose-500/40 animate-pulse">
+                      <Ban className="w-3 h-3" />
+                      <span>Access Denied (403)</span>
+                    </div>
+                  ) : person.isOnline ? (
                     <div className="flex items-center space-x-1 text-[11px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                       <span>Online</span>
@@ -430,6 +486,19 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
                     </div>
                   )}
                 </div>
+
+                {/* Blocked Alert Banner if locked out */}
+                {person.isBlocked && (
+                  <div className="bg-rose-950/50 border border-rose-800/70 rounded-lg p-2 text-xs font-mono text-rose-300 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                      <span className="truncate">{person.blockedReason || 'WAF Block Rule Active'}</span>
+                    </div>
+                    <span className="text-[9px] uppercase font-bold text-rose-400 bg-rose-900/60 px-1.5 py-0.5 rounded border border-rose-700 shrink-0">
+                      LOCKED OUT
+                    </span>
+                  </div>
+                )}
 
                 {/* IP Address & Copy */}
                 <div className="bg-black/50 border border-slate-800 rounded-lg p-2.5 flex items-center justify-between">
@@ -487,6 +556,33 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
                   <span className="text-slate-500 truncate max-w-[150px]" title={person.lastEndpoint}>
                     {person.lastEndpoint}
                   </span>
+                </div>
+
+                {/* WAF Real-Time Lockdown Enforcement (Block & Unblock Actions) */}
+                <div className="pt-2 border-t border-slate-800/80">
+                  {person.isBlocked ? (
+                    <button
+                      type="button"
+                      disabled={blockingTarget === (person.id || person.ip)}
+                      onClick={() => handleUnblockVisitor(person)}
+                      className="w-full py-2 px-3 rounded-lg bg-emerald-600/90 hover:bg-emerald-500 active:scale-[0.98] text-white font-mono text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-md shadow-emerald-950/40 disabled:opacity-50"
+                      title="Unblock this user and restore their website access in real time"
+                    >
+                      <Unlock className="w-3.5 h-3.5 text-emerald-200" />
+                      <span>{blockingTarget === (person.id || person.ip) ? 'Unblocking Access...' : '✅ Unblock Access'}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={blockingTarget === (person.id || person.ip)}
+                      onClick={() => handleBlockVisitor(person)}
+                      className="w-full py-2 px-3 rounded-lg bg-rose-600/90 hover:bg-rose-500 active:scale-[0.98] text-white font-mono text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-md shadow-rose-950/40 disabled:opacity-50"
+                      title="Instantly lock this user/device out of the website with an unclosable 403 Forbidden wall"
+                    >
+                      <Ban className="w-3.5 h-3.5 text-rose-200" />
+                      <span>{blockingTarget === (person.id || person.ip) ? 'Enforcing Block...' : '🚫 Block User & Device'}</span>
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

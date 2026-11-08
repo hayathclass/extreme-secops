@@ -285,43 +285,70 @@ class SecurityStore {
     const ONLINE_TIMEOUT_MS = 25000;
     const map = new Map<string, VisitorPerson>();
 
-    // Inspect from newest to oldest
-    const sorted = [...list].sort(
-      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    );
-
-    sorted.forEach((event) => {
+    // Group events by client IP
+    const eventsByIp = new Map<string, LogEvent[]>();
+    list.forEach((event) => {
       const ip = (event.sourceIp || '127.0.0.1').trim();
-      const existing = map.get(ip);
-      const eventTime = new Date(event.timestamp).getTime();
-      const isSim = event.flagReason?.includes('Simulated') || event.payloadSnippet?.includes('simulator');
+      const group = eventsByIp.get(ip) || [];
+      group.push(event);
+      eventsByIp.set(ip, group);
+    });
 
-      if (!existing) {
-        const isExit = event.eventType === 'SESSION_END';
-        const isFresh = (now - eventTime) < ONLINE_TIMEOUT_MS;
-        const isOnline = !isExit && isFresh;
+    eventsByIp.forEach((events, ip) => {
+      // Sort newest to oldest for this IP
+      events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-        map.set(ip, {
-          ip,
-          device: event.clientGeo?.device || (event.userAgent.includes('Mobile') ? 'Mobile Device' : 'Desktop'),
-          country: event.clientGeo?.country,
-          city: event.clientGeo?.city,
-          firstSeen: event.timestamp,
-          lastSeen: event.timestamp,
-          totalHits: 1,
-          lastEndpoint: `${event.method} ${event.endpoint}`,
-          lastStatus: event.status,
-          userAgent: event.userAgent,
-          isSimulated: isSim,
-          isOnline,
-          leftAt: isExit ? event.timestamp : (!isFresh ? event.timestamp : undefined),
-        });
+      const latestEvent = events[0];
+      const oldestEvent = events[events.length - 1];
+      const isSim = events.some((e) => e.flagReason?.includes('Simulated') || e.payloadSnippet?.includes('simulator'));
+
+      // Find the most recent SESSION_END event for this IP
+      const sessionEndEvent = events.find((e) => e.eventType === 'SESSION_END');
+
+      // Find the most recent active user interaction (pageview, heartbeat, click, authentication)
+      const latestActiveEvent = events.find(
+        (e) =>
+          e.eventType === 'PAGEVIEW' ||
+          e.eventType === 'HEARTBEAT' ||
+          e.eventType === 'USER_INTERACTION' ||
+          e.eventType === 'AUTHENTICATION' ||
+          (e.eventType === 'API_REQUEST' && !e.endpoint.includes('firestore') && !e.endpoint.includes('firebase'))
+      );
+
+      const latestActiveTime = latestActiveEvent ? new Date(latestActiveEvent.timestamp).getTime() : 0;
+      const sessionEndTime = sessionEndEvent ? new Date(sessionEndEvent.timestamp).getTime() : 0;
+
+      let isOnline = false;
+      let leftAt: string | undefined = undefined;
+
+      // If user reported SESSION_END and no active pageview happened after it: OFFLINE!
+      if (sessionEndTime > 0 && sessionEndTime >= (latestActiveTime - 3000)) {
+        isOnline = false;
+        leftAt = sessionEndEvent?.timestamp;
+      } else if (latestActiveTime > 0 && (now - latestActiveTime) < ONLINE_TIMEOUT_MS) {
+        // Active and within 25 seconds
+        isOnline = true;
       } else {
-        existing.totalHits += 1;
-        if (new Date(event.timestamp) < new Date(existing.firstSeen)) {
-          existing.firstSeen = event.timestamp;
-        }
+        // Inactive / timed out
+        isOnline = false;
+        leftAt = sessionEndEvent?.timestamp || (latestActiveEvent ? latestActiveEvent.timestamp : latestEvent.timestamp);
       }
+
+      map.set(ip, {
+        ip,
+        device: latestEvent.clientGeo?.device || (latestEvent.userAgent.includes('Mobile') ? 'Mobile Device' : 'Desktop'),
+        country: latestEvent.clientGeo?.country,
+        city: latestEvent.clientGeo?.city,
+        firstSeen: oldestEvent.timestamp,
+        lastSeen: latestActiveEvent ? latestActiveEvent.timestamp : latestEvent.timestamp,
+        totalHits: events.length,
+        lastEndpoint: latestActiveEvent ? `${latestActiveEvent.method} ${latestActiveEvent.endpoint}` : `${latestEvent.method} ${latestEvent.endpoint}`,
+        lastStatus: latestEvent.status,
+        userAgent: latestEvent.userAgent,
+        isSimulated: isSim,
+        isOnline,
+        leftAt,
+      });
     });
 
     return Array.from(map.values()).sort((a, b) => {

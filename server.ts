@@ -379,14 +379,19 @@ async function createServer() {
  * Install: <script src="${baseUrl}/api/collector/script.js" data-target-id="YOUR_TARGET_ID" data-api-key="YOUR_KEY" async></script>
  */
 (function() {
-  var scriptTag = document.currentScript;
+  var scriptTag = document.currentScript || document.querySelector('script[data-target-id]') || document.querySelector('script[src*="/api/collector/script.js"]');
   var targetId = (scriptTag && (scriptTag.getAttribute('data-target-id') || scriptTag.getAttribute('data-site-id'))) || 'target-atc-simulator';
   var apiKey = (scriptTag && scriptTag.getAttribute('data-api-key')) || '';
   var ingestUrl = '${baseUrl}/api/collector/ingest';
   var cachedClientIp = '';
   var initialSent = false;
+  var leaveReported = false;
 
   function transmit(data) {
+    // If user has exited/closed tab, do not transmit trailing background fetches or stream packets
+    if (leaveReported && data.eventType !== 'SESSION_END') {
+      return;
+    }
     try {
       var payload = Object.assign({
         targetId: targetId,
@@ -481,8 +486,12 @@ async function createServer() {
     var origFetch = window.fetch;
     window.fetch = function(input, init) {
       var fetchUrl = typeof input === 'string' ? input : (input && input.url ? input.url : '');
-      // Do not self-log telemetry calls to avoid loop
-      if (fetchUrl && fetchUrl.indexOf('/api/collector/ingest') !== -1) {
+      // Do not self-log telemetry calls, or third-party background long-poll streams (Firestore, Firebase, Google APIs)
+      if (!fetchUrl || fetchUrl.indexOf('/api/collector/ingest') !== -1 ||
+          fetchUrl.indexOf('firestore') !== -1 ||
+          fetchUrl.indexOf('firebase') !== -1 ||
+          fetchUrl.indexOf('googleapis.com') !== -1 ||
+          fetchUrl.indexOf('_next/static') !== -1) {
         return origFetch.apply(this, arguments);
       }
       var fetchMethod = (init && init.method ? init.method : 'GET').toUpperCase();
@@ -1502,40 +1511,68 @@ async function createServer() {
     const ONLINE_TIMEOUT_MS = 25000;
     const visitorMap = new Map<string, any>();
 
-    // Sort newest to oldest so latest session state (leave or pageview) takes precedence
-    const sorted = [...list].sort(
-      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    );
-
-    sorted.forEach((event) => {
+    // Group events by client IP
+    const eventsByIp = new Map<string, RealEvent[]>();
+    list.forEach((event) => {
       const ip = (event.sourceIp || '127.0.0.1').trim();
-      const existing = visitorMap.get(ip);
-      const eventTime = new Date(event.timestamp).getTime();
+      const group = eventsByIp.get(ip) || [];
+      group.push(event);
+      eventsByIp.set(ip, group);
+    });
 
-      if (!existing) {
-        const isExit = event.eventType === 'SESSION_END';
-        const isFresh = (now - eventTime) < ONLINE_TIMEOUT_MS;
-        const isOnline = !isExit && isFresh;
+    eventsByIp.forEach((events, ip) => {
+      // Sort newest to oldest for this IP
+      events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-        visitorMap.set(ip, {
-          ip,
-          device: event.clientGeo?.device || 'Desktop',
-          country: event.clientGeo?.country,
-          firstSeen: event.timestamp,
-          lastSeen: event.timestamp,
-          totalHits: 1,
-          lastEndpoint: `${event.method} ${event.endpoint}`,
-          lastStatus: event.status,
-          userAgent: event.userAgent,
-          isOnline,
-          leftAt: isExit ? event.timestamp : undefined,
-        });
+      const latestEvent = events[0];
+      const oldestEvent = events[events.length - 1];
+
+      // Find the most recent SESSION_END event for this IP
+      const sessionEndEvent = events.find((e) => e.eventType === 'SESSION_END');
+
+      // Find the most recent active user interaction (pageview, heartbeat, click, interaction)
+      const latestActiveEvent = events.find(
+        (e) =>
+          e.eventType === 'PAGEVIEW' ||
+          e.eventType === 'HEARTBEAT' ||
+          e.eventType === 'USER_INTERACTION' ||
+          e.eventType === 'AUTHENTICATION' ||
+          (e.eventType === 'API_REQUEST' && !e.endpoint.includes('firestore') && !e.endpoint.includes('firebase'))
+      );
+
+      const latestActiveTime = latestActiveEvent ? new Date(latestActiveEvent.timestamp).getTime() : 0;
+      const sessionEndTime = sessionEndEvent ? new Date(sessionEndEvent.timestamp).getTime() : 0;
+
+      let isOnline = false;
+      let leftAt: string | undefined = undefined;
+
+      // If user reported SESSION_END and no active pageview happened after it: OFFLINE!
+      if (sessionEndTime > 0 && sessionEndTime >= (latestActiveTime - 3000)) {
+        isOnline = false;
+        leftAt = sessionEndEvent?.timestamp;
+      } else if (latestActiveTime > 0 && (now - latestActiveTime) < ONLINE_TIMEOUT_MS) {
+        // Active and within 25 seconds
+        isOnline = true;
       } else {
-        existing.totalHits += 1;
-        if (new Date(event.timestamp) < new Date(existing.firstSeen)) {
-          existing.firstSeen = event.timestamp;
-        }
+        // Inactive / timed out
+        isOnline = false;
+        leftAt = sessionEndEvent?.timestamp || (latestActiveEvent ? latestActiveEvent.timestamp : latestEvent.timestamp);
       }
+
+      visitorMap.set(ip, {
+        ip,
+        device: latestEvent.clientGeo?.device || (latestEvent.userAgent.includes('Mobile') ? 'Mobile Device' : 'Desktop'),
+        country: latestEvent.clientGeo?.country,
+        city: latestEvent.clientGeo?.city,
+        firstSeen: oldestEvent.timestamp,
+        lastSeen: latestActiveEvent ? latestActiveEvent.timestamp : latestEvent.timestamp,
+        totalHits: events.length,
+        lastEndpoint: latestActiveEvent ? `${latestActiveEvent.method} ${latestActiveEvent.endpoint}` : `${latestEvent.method} ${latestEvent.endpoint}`,
+        lastStatus: latestEvent.status,
+        userAgent: latestEvent.userAgent,
+        isOnline,
+        leftAt,
+      });
     });
 
     const visitors = Array.from(visitorMap.values()).sort((a, b) => {

@@ -10,7 +10,6 @@ import {
   FileText,
   PlusCircle,
   ChevronDown,
-  UploadCloud,
   Globe,
 } from 'lucide-react';
 
@@ -21,7 +20,6 @@ interface HeaderProps {
   selectedTarget: Target | null;
   onSelectTarget: (target: Target) => void;
   onOpenConnectModal: () => void;
-  onOpenUploadModal: () => void;
   logCount?: number;
   threatCount?: number;
   incidentCount?: number;
@@ -35,7 +33,6 @@ export const Header: React.FC<HeaderProps> = ({
   selectedTarget,
   onSelectTarget,
   onOpenConnectModal,
-  onOpenUploadModal,
   logCount = 0,
   threatCount = 0,
   incidentCount = 0,
@@ -110,30 +107,11 @@ export const Header: React.FC<HeaderProps> = ({
                         }`}
                       >
                         <span className="font-mono truncate">{t.hostname}</span>
-                        <span
-                          className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold ${
-                            t.isLab
-                              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-                              : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                          }`}
-                        >
-                          {t.isLab ? 'DEMO' : 'REAL'}
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                          REAL
                         </span>
                       </button>
                     ))}
-                    <div className="border-t border-slate-800 mt-1 pt-1 px-2 space-y-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onOpenConnectModal();
-                          setDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-2 py-1.5 text-xs text-cyan-400 hover:bg-slate-800/80 rounded flex items-center space-x-1.5"
-                      >
-                        <PlusCircle className="w-3.5 h-3.5" />
-                        <span>Connect New Website</span>
-                      </button>
-                    </div>
                   </div>
                 )}
               </div>
@@ -156,46 +134,23 @@ export const Header: React.FC<HeaderProps> = ({
                   </span>
                 </div>
 
-                {/* Real Data vs Demo Badge */}
-                <div
-                  className={`px-2.5 py-1 rounded text-xs font-mono font-bold tracking-wider flex items-center space-x-1.5 border ${
-                    selectedTarget.isLab
-                      ? 'bg-amber-950/30 border-amber-500/40 text-amber-400'
-                      : 'bg-emerald-950/30 border-emerald-500/40 text-emerald-400'
-                  }`}
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      selectedTarget.isLab ? 'bg-amber-400' : 'bg-emerald-400'
-                    }`}
-                  />
-                  <span className="text-[11px]">
-                    {selectedTarget.isLab ? 'DEMO ENVIRONMENT' : 'REAL TELEMETRY'}
-                  </span>
+                {/* Real Data Badge */}
+                <div className="px-2.5 py-1 rounded text-xs font-mono font-bold tracking-wider flex items-center space-x-1.5 border bg-emerald-950/30 border-emerald-500/40 text-emerald-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  <span className="text-[11px]">REAL TELEMETRY</span>
                 </div>
               </>
             )}
 
-            {/* Primary Action 1: Upload Website */}
-            <button
-              type="button"
-              onClick={onOpenUploadModal}
-              title="Upload website ZIP, source files, or server logs"
-              className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white flex items-center space-x-1.5 transition shadow-md shadow-cyan-950/60 border border-cyan-400/40"
-            >
-              <UploadCloud className="w-4 h-4 text-white" />
-              <span>Upload Website</span>
-            </button>
-
-            {/* Primary Action 2: Connect / Audit URL */}
+            {/* Single Primary Action: Connect / Audit Website */}
             <button
               type="button"
               onClick={onOpenConnectModal}
               title="Connect an authorized website domain or probe live security headers"
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+              className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white flex items-center space-x-1.5 transition shadow-md shadow-cyan-950/60 border border-cyan-400/40"
             >
-              <Globe className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Connect / Audit URL</span>
+              <Globe className="w-3.5 h-3.5 text-white" />
+              <span>Connect / Audit Website</span>
             </button>
           </div>
         </div>

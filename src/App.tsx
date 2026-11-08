@@ -4,7 +4,6 @@ import { securityStore } from './services/securityStore';
 import { Header } from './components/Header';
 import { ConnectTargetModal } from './components/ConnectTargetModal';
 import { IngestTesterModal } from './components/IngestTesterModal';
-import { UploadWebsiteModal } from './components/UploadWebsiteModal';
 import { DashboardView } from './components/DashboardView';
 import { LiveLogsView } from './components/LiveLogsView';
 import { ThreatsAlertsView } from './components/ThreatsAlertsView';
@@ -18,7 +17,6 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [isIngestModalOpen, setIsIngestModalOpen] = useState(false);
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isStreaming, setIsStreaming] = useState(securityStore.getAutoStreamActive());
 
   // Synchronize with store
@@ -111,7 +109,6 @@ export default function App() {
         selectedTarget={selectedTarget}
         onSelectTarget={(t) => setSelectedTarget(t)}
         onOpenConnectModal={() => setIsConnectModalOpen(true)}
-        onOpenUploadModal={() => setIsUploadModalOpen(true)}
         logCount={logs.length}
         threatCount={threats.length}
         incidentCount={incidents.filter((i) => i.status !== 'RESOLVED').length}
@@ -189,16 +186,6 @@ export default function App() {
         onClose={() => setIsConnectModalOpen(false)}
         onTargetCreated={handleTargetCreated}
         defaultUrl={selectedTarget?.url}
-      />
-
-      {/* Upload Real Website Modal */}
-      <UploadWebsiteModal
-        isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
-        onUploadApplied={(t) => {
-          setSelectedTarget(t);
-          setCurrentTab('dashboard');
-        }}
       />
 
       {/* Ingestion Tester Modal */}

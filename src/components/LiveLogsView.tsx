@@ -51,7 +51,6 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
   const [isProbing, setIsProbing] = useState(false);
   const [isSendingPing, setIsSendingPing] = useState(false);
   const [pingSuccess, setPingSuccess] = useState(false);
-  const [isSimulatingSecondDevice, setIsSimulatingSecondDevice] = useState(false);
   const [copiedIp, setCopiedIp] = useState<string | null>(null);
   const [copiedTestUrl, setCopiedTestUrl] = useState(false);
   const [showEmbedCode, setShowEmbedCode] = useState(false);
@@ -150,32 +149,8 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
     downloadAnchor.remove();
   };
 
-  const exportAsCsv = () => {
-    const headers = ['Timestamp', 'Source', 'Method', 'Endpoint', 'Status', 'Client IP', 'Severity', 'Event Type', 'Latency Ms'];
-    const rows = filteredLogs.map((l) => [
-      `"${l.timestamp}"`,
-      `"${l.logSource || 'REAL'}"`,
-      `"${l.method}"`,
-      `"${l.endpoint}"`,
-      l.status,
-      `"${l.sourceIp}"`,
-      `"${l.severity}"`,
-      `"${l.eventType}"`,
-      l.latencyMs || 0,
-    ]);
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `extreme-real-logs-${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  };
-
   const realCount = logs.filter((l) => l.logSource === 'REAL_LIVE_INGEST').length;
   const probeCount = logs.filter((l) => l.logSource === 'REAL_SERVER_PROBE').length;
-  const simCount = logs.filter((l) => l.logSource === 'SIMULATION').length;
 
   // Local 1-second pulse so online/offline timeouts and relative timestamps update dynamically
   const [, setTick] = useState(0);
@@ -189,21 +164,6 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
   const activeVisitors = visitorPersons.filter((p) => p.isOnline);
   const hostOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   const mobileTestUrl = `${hostOrigin}/api/collector/test-visit?targetId=${target?.id || 'target-atc-simulator'}`;
-
-  const handleSimulateSecondDevice = async () => {
-    if (!target) return;
-    setIsSimulatingSecondDevice(true);
-    try {
-      await securityStore.sendSecondDeviceSimulation(target.id, 'mobile');
-    } finally {
-      setIsSimulatingSecondDevice(false);
-    }
-  };
-
-  const handleSimulateLeave = async (ip?: string) => {
-    if (!target) return;
-    await securityStore.sendVisitorExitSimulation(target.id, ip);
-  };
 
   const copyIpAddress = (ip: string) => {
     navigator.clipboard.writeText(ip);
@@ -390,29 +350,6 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
 
             <button
               type="button"
-              onClick={handleSimulateSecondDevice}
-              disabled={isSimulatingSecondDevice}
-              className="px-3 py-1.5 rounded-lg bg-cyan-950/70 hover:bg-cyan-900/80 text-cyan-300 border border-cyan-500/40 text-xs font-bold flex items-center space-x-1.5 transition active:scale-95 shadow-sm"
-              title="Add a 2nd simulated person from a distinct mobile 5G IP to test multi-person tracking"
-            >
-              <Smartphone className={`w-3.5 h-3.5 ${isSimulatingSecondDevice ? 'animate-spin' : ''}`} />
-              <span>{isSimulatingSecondDevice ? 'Connecting 2nd Device...' : '+ Add 2nd Device (Mobile IP)'}</span>
-            </button>
-
-            {activeVisitors.length > 0 && (
-              <button
-                type="button"
-                onClick={() => handleSimulateLeave()}
-                className="px-3 py-1.5 rounded-lg bg-rose-950/50 hover:bg-rose-900/70 text-rose-300 border border-rose-500/40 text-xs font-bold flex items-center space-x-1.5 transition active:scale-95 shadow-sm"
-                title="Simulate active visitor closing tab / leaving website"
-              >
-                <X className="w-3.5 h-3.5 text-rose-400" />
-                <span>Simulate Device Leave</span>
-              </button>
-            )}
-
-            <button
-              type="button"
               onClick={() => {
                 navigator.clipboard.writeText(mobileTestUrl);
                 setCopiedTestUrl(true);
@@ -479,19 +416,9 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
                     )}
                   </div>
                   {person.isOnline ? (
-                    <div className="flex items-center space-x-1.5">
-                      <div className="flex items-center space-x-1 text-[11px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        <span>Online</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleSimulateLeave(person.ip)}
-                        className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/40 transition"
-                        title="Simulate this person closing tab"
-                      >
-                        Leave
-                      </button>
+                    <div className="flex items-center space-x-1 text-[11px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span>Online</span>
                     </div>
                   ) : (
                     <div className="flex items-center space-x-1 text-[11px] font-mono text-slate-400 bg-slate-800/90 px-2 py-0.5 rounded border border-slate-700">
@@ -578,8 +505,6 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
                 <span className="text-emerald-400 font-semibold">{realCount} Real Ingest</span>
                 <span>•</span>
                 <span className="text-cyan-400 font-semibold">{probeCount} Real Probes</span>
-                <span>•</span>
-                <span className="text-amber-400 font-semibold">{simCount} Simulated</span>
               </div>
             </div>
           </div>
@@ -622,7 +547,7 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
               )}
             </button>
 
-            {/* Export Menu */}
+            {/* Single Export Button */}
             <button
               type="button"
               onClick={exportAsJson}
@@ -630,16 +555,7 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
               className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold flex items-center space-x-1 transition"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>JSON</span>
-            </button>
-            <button
-              type="button"
-              onClick={exportAsCsv}
-              title="Export filtered logs as CSV"
-              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold flex items-center space-x-1 transition"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>CSV</span>
+              <span>Export</span>
             </button>
 
             {onClearLogs && (

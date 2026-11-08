@@ -167,38 +167,47 @@ class SecurityStore {
     // 1. Establish immediate Server-Sent Events (SSE) stream for instant real-time pushes
     try {
       if (typeof window !== 'undefined' && window.EventSource) {
-        const sse = new EventSource('/api/collector/stream');
-        sse.onmessage = (e) => {
+        const sseUrls = ['/api/collector/stream'];
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+          sseUrls.push('https://extreme-secops.onrender.com/api/collector/stream');
+        }
+
+        sseUrls.forEach((streamUrl) => {
           try {
-            const data = JSON.parse(e.data);
-            if (data && data.type === 'CLEARED') {
-              const clearedTargetId = data.targetId || this.activeTargetId;
-              if (clearedTargetId) {
-                this.logs.set(clearedTargetId, []);
-                const target = this.getTarget(clearedTargetId);
-                if (target) {
-                  target.realEventsCount = 0;
-                  target.totalRequests = 0;
-                  target.securityEventsCount = 0;
+            const sse = new EventSource(streamUrl);
+            sse.onmessage = (e) => {
+              try {
+                const data = JSON.parse(e.data);
+                if (data && data.type === 'CLEARED') {
+                  const clearedTargetId = data.targetId || this.activeTargetId;
+                  if (clearedTargetId) {
+                    this.logs.set(clearedTargetId, []);
+                    const target = this.getTarget(clearedTargetId);
+                    if (target) {
+                      target.realEventsCount = 0;
+                      target.totalRequests = 0;
+                      target.securityEventsCount = 0;
+                    }
+                    this.notify();
+                  }
+                  return;
                 }
-                this.notify();
-              }
-              return;
-            }
-            if (data && data.id && data.sourceIp) {
-              const activeId = this.activeTargetId || (this.targets[0] ? this.targets[0].id : null);
-              const targetId = (data.targetId && this.getTarget(data.targetId)) ? data.targetId : activeId;
-              if (targetId) {
-                this.ingestLogs(targetId, [data]);
-                const target = this.getTarget(targetId);
-                if (target) {
-                  target.realEventsCount = (target.realEventsCount || 0) + 1;
-                  target.totalRequests = (target.totalRequests || 0) + 1;
+                if (data && data.id && data.sourceIp) {
+                  const activeId = this.activeTargetId || (this.targets[0] ? this.targets[0].id : null);
+                  const targetId = (data.targetId && this.getTarget(data.targetId)) ? data.targetId : activeId;
+                  if (targetId) {
+                    this.ingestLogs(targetId, [data]);
+                    const target = this.getTarget(targetId);
+                    if (target) {
+                      target.realEventsCount = (target.realEventsCount || 0) + 1;
+                      target.totalRequests = (target.totalRequests || 0) + 1;
+                    }
+                  }
                 }
-              }
-            }
+              } catch {}
+            };
           } catch {}
-        };
+        });
       }
     } catch {}
 
@@ -232,25 +241,31 @@ class SecurityStore {
     if (this.isPollingCollector) return;
     this.isPollingCollector = true;
     try {
-      // Fetch all recent events from the last 24 hours so newly connected devices and other visitors are immediately visible
-      const res = await fetch(
-        `/api/collector/events?targetId=${encodeURIComponent(targetId)}`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        if (data.events && Array.isArray(data.events) && data.events.length > 0) {
-          const target = this.getTarget(targetId);
-          const currentList = this.logs.get(targetId) || [];
-          const currentIds = new Set(currentList.map((e) => e.id));
-          const newEvents: LogEvent[] = data.events.filter((e: LogEvent) => !currentIds.has(e.id));
-          if (newEvents.length > 0) {
-            this.ingestLogs(targetId, newEvents);
-            if (target) {
-              target.realEventsCount = (target.realEventsCount || 0) + newEvents.length;
-              target.totalRequests = (target.totalRequests || 0) + newEvents.length;
+      const endpoints = [`/api/collector/events?targetId=${encodeURIComponent(targetId)}`];
+      if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+        endpoints.push(`https://extreme-secops.onrender.com/api/collector/events?targetId=${encodeURIComponent(targetId)}`);
+      }
+
+      for (const endpoint of endpoints) {
+        try {
+          const res = await fetch(endpoint);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.events && Array.isArray(data.events) && data.events.length > 0) {
+              const target = this.getTarget(targetId);
+              const currentList = this.logs.get(targetId) || [];
+              const currentIds = new Set(currentList.map((e) => e.id));
+              const newEvents: LogEvent[] = data.events.filter((e: LogEvent) => !currentIds.has(e.id));
+              if (newEvents.length > 0) {
+                this.ingestLogs(targetId, newEvents);
+                if (target) {
+                  target.realEventsCount = (target.realEventsCount || 0) + newEvents.length;
+                  target.totalRequests = (target.totalRequests || 0) + newEvents.length;
+                }
+              }
             }
           }
-        }
+        } catch {}
       }
     } catch {
       // Ignore background network polling errors

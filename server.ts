@@ -341,6 +341,7 @@ async function createServer() {
 
   app.use(express.json({ limit: '20mb' }));
   app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+  app.use(express.text({ type: ['text/plain', 'text/*'], limit: '20mb' }));
 
   // CORS support so external websites can post telemetry to /api/collector/ingest
   app.use((req, res, next) => {
@@ -399,16 +400,20 @@ async function createServer() {
       }, data);
 
       var body = JSON.stringify(payload);
-      if (navigator.sendBeacon) {
-        var blob = new Blob([body], { type: 'application/json' });
-        navigator.sendBeacon(ingestUrl, blob);
-      } else {
+      if (window.fetch) {
         fetch(ingestUrl, {
           method: 'POST',
+          mode: 'cors',
           headers: { 'Content-Type': 'application/json' },
           body: body,
           keepalive: true
-        }).catch(function() {});
+        }).catch(function() {
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon(ingestUrl, body);
+          }
+        });
+      } else if (navigator.sendBeacon) {
+        navigator.sendBeacon(ingestUrl, body);
       }
     } catch (e) {}
   }
@@ -1244,7 +1249,14 @@ async function createServer() {
 
   // Real HTTP Event Ingestion endpoint with Robust Real Client IP Extraction
   app.post('/api/collector/ingest', (req, res) => {
-    const body = req.body || {};
+    let body = req.body || {};
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch (e) {
+        body = {};
+      }
+    }
 
     // 1. Extract Real Remote Client IP from proxy and edge headers
     const cfIp = (req.headers['cf-connecting-ip'] as string)?.trim();

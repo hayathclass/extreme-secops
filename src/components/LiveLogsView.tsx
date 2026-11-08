@@ -108,15 +108,16 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
     if (!target) return;
     setIsSendingPing(true);
     try {
+      const realIp = await securityStore.resolveCurrentClientIp();
       await securityStore.sendRealIngestEvent(target.id, {
         method: 'GET',
         endpoint: '/api/v1/visitor/session',
         status: 200,
         eventType: 'PAGEVIEW',
         latencyMs: 16,
-        sourceIp: 'Client Live Browser',
+        sourceIp: realIp,
         payloadSnippet: 'session_init: visitor_token_live',
-        flagReason: 'Real browser live event verified via collector endpoint',
+        flagReason: `Real browser live event from ${realIp}`,
       });
       setPingSuccess(true);
       setTimeout(() => setPingSuccess(false), 2500);

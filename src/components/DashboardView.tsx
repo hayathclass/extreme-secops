@@ -117,15 +117,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const handleSendRealPing = async () => {
     setIsSendingPing(true);
     try {
+      const realIp = await securityStore.resolveCurrentClientIp();
       await securityStore.sendRealIngestEvent(target.id, {
         method: 'GET',
         endpoint: '/api/v1/health',
         status: 200,
         eventType: 'API_REQUEST',
         latencyMs: 14,
-        sourceIp: '127.0.0.1 (Verified Client)',
+        sourceIp: realIp,
         payloadSnippet: 'telemetry_probe: client_verification_ok',
-        flagReason: 'Verified live HTTP request to telemetry endpoint',
+        flagReason: `Verified live HTTP request from ${realIp}`,
       });
       setPingSuccess(true);
       setTimeout(() => setPingSuccess(false), 2200);

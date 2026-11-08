@@ -639,27 +639,53 @@ async function createServer() {
   }
 
   // Query visitor public IP so remote phones/laptops send their exact external IP address
+  var ipResolved = false;
   var ipTimeout = setTimeout(function() {
-    sendInitialPageview();
-  }, 400);
+    if (!ipResolved) {
+      ipResolved = true;
+      sendInitialPageview();
+    }
+  }, 2200);
 
+  function applyResolvedIp(ip) {
+    if (ip && !cachedClientIp && ip !== '127.0.0.1' && ip !== '::1') {
+      cachedClientIp = String(ip).trim();
+    }
+    if (!ipResolved) {
+      ipResolved = true;
+      clearTimeout(ipTimeout);
+      sendInitialPageview();
+    }
+  }
+
+  // 1. Direct Extreme SecOps IP detection endpoint (works across all browsers, zero adblock blocks)
   try {
-    fetch('https://api.ipify.org?format=json')
+    fetch('${baseUrl}/api/collector/my-ip')
       .then(function(r) { return r.json(); })
       .then(function(d) {
-        clearTimeout(ipTimeout);
-        if (d && d.ip) {
-          cachedClientIp = d.ip;
+        if (d && d.ip && d.ip !== '127.0.0.1' && d.ip !== '::1') {
+          applyResolvedIp(d.ip);
+        } else {
+          throw new Error('Local fallback');
         }
-        sendInitialPageview();
       })
       .catch(function() {
-        clearTimeout(ipTimeout);
-        sendInitialPageview();
+        // 2. Secondary redundant external IP resolution
+        fetch('https://api.ipify.org?format=json')
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (d && d.ip) {
+              applyResolvedIp(d.ip);
+            } else {
+              applyResolvedIp('');
+            }
+          })
+          .catch(function() {
+            applyResolvedIp('');
+          });
       });
   } catch(e) {
-    clearTimeout(ipTimeout);
-    sendInitialPageview();
+    applyResolvedIp('');
   }
 
   // 2. Intercept Single-Page App (SPA) History Navigation (Next.js / React Router on Vercel)
@@ -1537,6 +1563,28 @@ async function createServer() {
     });
   });
 
+  // Real Client IP discovery endpoint for mobile, tablet, and laptop visitors
+  app.get('/api/collector/my-ip', (req, res) => {
+    const cfIp = (req.headers['cf-connecting-ip'] as string)?.trim();
+    const trueClientIp = (req.headers['true-client-ip'] as string)?.trim();
+    const xRealIp = (req.headers['x-real-ip'] as string)?.trim();
+    const xffRaw = (req.headers['x-forwarded-for'] as string);
+    const xffList = xffRaw ? xffRaw.split(',').map((s) => s.trim()).filter(Boolean) : [];
+    const directSocketIp = req.socket.remoteAddress?.replace(/^::ffff:/, '') || '';
+
+    const isNonLocalIp = (ip: string) => {
+      if (!ip || typeof ip !== 'string') return false;
+      const c = ip.trim();
+      return c !== '127.0.0.1' && c !== '::1' && c !== 'localhost';
+    };
+
+    let clientIp = cfIp || trueClientIp || xRealIp || xffList.find((ip) => isNonLocalIp(ip)) || directSocketIp || '127.0.0.1';
+    clientIp = clientIp.replace(/^::ffff:/, '').trim();
+
+    const country = (req.headers['cf-ipcountry'] as string) || undefined;
+    res.json({ ip: clientIp, country });
+  });
+
   // Real HTTP Event Ingestion endpoint with Robust Real Client IP Extraction
   app.post('/api/collector/ingest', (req, res) => {
     let body = req.body || {};
@@ -2005,17 +2053,34 @@ async function createServer() {
       }
     });
 
-    fetch('https://api.ipify.org?format=json')
+    fetch('${baseUrl}/api/collector/my-ip')
       .then(function(r) { return r.json(); })
       .then(function(d) {
-        if (d && d.ip) {
+        if (d && d.ip && d.ip !== '127.0.0.1' && d.ip !== '::1') {
           publicIp = d.ip;
           document.getElementById('ipVal').textContent = d.ip;
-          sendHit(window.location.pathname, 200, 'PAGEVIEW', 'Initial verified mobile visit from ' + d.ip);
+          sendHit(window.location.pathname, 200, 'PAGEVIEW', 'Live verified visit from ' + d.ip);
+        } else {
+          throw new Error('Fallback external');
         }
-      }).catch(function() {
-        document.getElementById('ipVal').textContent = 'Direct Network IP';
-        sendHit(window.location.pathname, 200, 'PAGEVIEW', 'Initial mobile visit');
+      })
+      .catch(function() {
+        fetch('https://api.ipify.org?format=json')
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (d && d.ip) {
+              publicIp = d.ip;
+              document.getElementById('ipVal').textContent = d.ip;
+              sendHit(window.location.pathname, 200, 'PAGEVIEW', 'Live verified visit from ' + d.ip);
+            } else {
+              document.getElementById('ipVal').textContent = 'Direct Network IP';
+              sendHit(window.location.pathname, 200, 'PAGEVIEW', 'Live device visit');
+            }
+          })
+          .catch(function() {
+            document.getElementById('ipVal').textContent = 'Direct Network IP';
+            sendHit(window.location.pathname, 200, 'PAGEVIEW', 'Live device visit');
+          });
       });
   </script>
 </body>

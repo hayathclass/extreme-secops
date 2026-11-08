@@ -416,57 +416,31 @@ class SecurityStore {
     return this.getVisitorPersons(targetId).filter((p) => p.isOnline).length;
   }
 
-  public async sendVisitorExitSimulation(targetId: string, ip?: string): Promise<LogEvent> {
-    const list = this.getVisitorPersons(targetId);
-    const targetIp = ip || (list.find((p) => p.isOnline)?.ip) || (list[0]?.ip) || '49.37.150.88';
-    return await this.sendRealIngestEvent(targetId, {
-      method: 'POST',
-      endpoint: '/session/leave',
-      status: 200,
-      eventType: 'SESSION_END',
-      sourceIp: targetIp,
-      flagReason: `Visitor from ${targetIp} closed tab / left website (Simulated Exit)`,
-    });
-  }
-
-  public async sendSecondDeviceSimulation(targetId: string, deviceType: 'mobile' | 'tablet' | 'remote_desktop' = 'mobile'): Promise<LogEvent> {
-    const mobileIps = ['49.37.150.88', '182.72.10.45', '103.21.244.12', '152.58.42.19', '157.34.120.91'];
-    const randomIp = mobileIps[Math.floor(Math.random() * mobileIps.length)];
-
-    let ua = 'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
-    let devLabel = 'Android Mobile';
-    let path = '/products/featured';
-
-    if (deviceType === 'tablet') {
-      ua = 'Mozilla/5.0 (iPad; CPU OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1';
-      devLabel = 'iPad (iPadOS)';
-      path = '/dashboard/overview';
-    } else if (deviceType === 'remote_desktop') {
-      ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
-      devLabel = 'Mac (macOS)';
-      path = '/api/v1/auth/session';
-    }
-
-    return await this.sendRealIngestEvent(targetId, {
-      method: 'GET',
-      endpoint: path,
-      status: 200,
-      eventType: 'PAGEVIEW',
-      latencyMs: 18,
-      sourceIp: randomIp,
-      userAgent: ua,
-      clientGeo: {
-        device: devLabel,
-        country: 'IN',
-        city: 'Mumbai',
-      },
-      flagReason: `Distinct 2nd device entry from public IP ${randomIp} (${devLabel})`,
-    });
+  public async resolveCurrentClientIp(): Promise<string> {
+    try {
+      const res = await fetch('/api/collector/my-ip');
+      const data = await res.json();
+      if (data?.ip && data.ip !== '127.0.0.1' && data.ip !== '::1') {
+        return data.ip;
+      }
+    } catch {}
+    try {
+      const res = await fetch('https://api.ipify.org?format=json');
+      const data = await res.json();
+      if (data?.ip) return data.ip;
+    } catch {}
+    return '127.0.0.1';
   }
 
   public async sendRealIngestEvent(targetId: string, eventData: Partial<LogEvent>): Promise<LogEvent> {
     const target = this.getTarget(targetId);
     const apiKey = target?.apiKey || '';
+
+    // Automatically resolve genuine device IP if not specified or placeholder
+    let sourceIp = eventData.sourceIp;
+    if (!sourceIp || sourceIp === '127.0.0.1' || sourceIp.includes('Client')) {
+      sourceIp = await this.resolveCurrentClientIp();
+    }
 
     try {
       const res = await fetch('/api/collector/ingest', {
@@ -480,6 +454,8 @@ class SecurityStore {
           targetId,
           apiKey,
           ...eventData,
+          sourceIp,
+          clientPublicIp: sourceIp,
         }),
       });
 
@@ -504,7 +480,7 @@ class SecurityStore {
       method: eventData.method || 'POST',
       endpoint: eventData.endpoint || '/api/v1/auth/login',
       status: eventData.status || 200,
-      sourceIp: '127.0.0.1 (Direct Client Ping)',
+      sourceIp: sourceIp || '127.0.0.1',
       userAgent: navigator.userAgent || 'Live Ingest Agent',
       eventType: eventData.eventType || 'API_REQUEST',
       severity: eventData.severity || 'NORMAL',
@@ -512,7 +488,7 @@ class SecurityStore {
       isLab: false,
       logSource: 'REAL_LIVE_INGEST',
       payloadSnippet: eventData.payloadSnippet,
-      flagReason: eventData.flagReason,
+      flagReason: eventData.flagReason || `Live HTTP telemetry event from ${sourceIp || 'Device'}`,
     };
     this.ingestLogs(targetId, [fallbackEvent]);
     if (target) {

@@ -72,15 +72,16 @@ export default function App() {
 
   const handleSendRealLiveHit = async () => {
     if (!selectedTarget) return;
+    const realIp = await securityStore.resolveCurrentClientIp();
     await securityStore.sendRealIngestEvent(selectedTarget.id, {
       method: 'GET',
       endpoint: '/api/v1/health',
       status: 200,
       eventType: 'API_REQUEST',
       latencyMs: 16,
-      sourceIp: '127.0.0.1 (Verified Client)',
+      sourceIp: realIp,
       payloadSnippet: 'telemetry_probe: client_verification_ok',
-      flagReason: 'Verified live HTTP request to telemetry endpoint',
+      flagReason: `Verified live HTTP request from ${realIp}`,
     });
   };
 

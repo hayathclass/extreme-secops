@@ -65,6 +65,20 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
   );
   const [selectedLog, setSelectedLog] = useState<LogEvent | null>(null);
   const [copiedPayload, setCopiedPayload] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleManualRefresh = async () => {
+    if (!target) return;
+    setIsRefreshing(true);
+    try {
+      await securityStore.fetchRemoteCollectorEvents(target.id);
+      await securityStore.probeLiveTarget(target.id);
+    } catch (e) {
+      console.error('Refresh error:', e);
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
 
   const filteredLogs = logs.filter((log) => {
     // Source filter: REAL_ONLY, REAL_LIVE_INGEST, REAL_SERVER_PROBE, SIMULATION, ALL
@@ -345,6 +359,17 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold flex items-center space-x-1.5 transition active:scale-95 shadow-sm"
+              title="Refresh connected visitor devices"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-cyan-400' : 'text-slate-400'}`} />
+              <span>{isRefreshing ? 'Refreshing...' : 'Refresh Visitors'}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={handleSimulateSecondDevice}
               disabled={isSimulatingSecondDevice}
               className="px-3 py-1.5 rounded-lg bg-cyan-950/70 hover:bg-cyan-900/80 text-cyan-300 border border-cyan-500/40 text-xs font-bold flex items-center space-x-1.5 transition active:scale-95 shadow-sm"
@@ -508,6 +533,18 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
 
           {/* Action Toolbar */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Manual Refresh Button */}
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              title="Manually fetch latest real logs from cloud collector"
+              className="px-3 py-1.5 rounded-lg bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-300 border border-cyan-500/50 text-xs font-bold flex items-center space-x-1.5 transition active:scale-95 shadow-sm"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-cyan-400' : ''}`} />
+              <span>{isRefreshing ? 'Refreshing...' : 'Refresh Logs'}</span>
+            </button>
+
             {/* Stream Active Toggle */}
             <button
               type="button"

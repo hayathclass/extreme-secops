@@ -9,10 +9,8 @@ import { DashboardView } from './components/DashboardView';
 import { LiveLogsView } from './components/LiveLogsView';
 import { ThreatsAlertsView } from './components/ThreatsAlertsView';
 import { IncidentsView } from './components/IncidentsView';
-import { RemediationView } from './components/RemediationView';
 import { ExtremeAnalystView } from './components/ExtremeAnalystView';
 import { ReportView } from './components/ReportView';
-import { MultiSiteNOCView } from './components/MultiSiteNOCView';
 
 export default function App() {
   const [targets, setTargets] = useState<Target[]>(securityStore.getTargets());
@@ -21,7 +19,6 @@ export default function App() {
   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [isIngestModalOpen, setIsIngestModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [selectedThreatIdForRemediation, setSelectedThreatIdForRemediation] = useState<string | undefined>();
   const [isStreaming, setIsStreaming] = useState(securityStore.getAutoStreamActive());
 
   // Synchronize with store
@@ -141,18 +138,6 @@ export default function App() {
               />
             )}
 
-            {currentTab === 'noc' && (
-              <MultiSiteNOCView
-                targets={targets}
-                selectedTarget={selectedTarget}
-                onSelectTarget={(t) => {
-                  setSelectedTarget(t);
-                  securityStore.setActiveTarget(t.id);
-                }}
-                onNavigate={(tab) => setCurrentTab(tab)}
-              />
-            )}
-
             {currentTab === 'logs' && (
               <LiveLogsView
                 logs={logs}
@@ -167,10 +152,6 @@ export default function App() {
               <ThreatsAlertsView
                 threats={threats}
                 target={selectedTarget}
-                onNavigateToRemediation={(threatId) => {
-                  setSelectedThreatIdForRemediation(threatId);
-                  setCurrentTab('remediation');
-                }}
                 onNavigateToIncident={(threatId) => setCurrentTab('incidents')}
                 onDeleteThreat={handleDeleteThreat}
                 onClearAllThreats={handleClearAllThreats}
@@ -181,17 +162,6 @@ export default function App() {
               <IncidentsView
                 incidents={incidents}
                 onUpdateStatus={handleUpdateIncidentStatus}
-                onNavigateToRemediation={(threatId) => {
-                  setSelectedThreatIdForRemediation(threatId);
-                  setCurrentTab('remediation');
-                }}
-              />
-            )}
-
-            {currentTab === 'remediation' && (
-              <RemediationView
-                incidents={incidents}
-                selectedThreatId={selectedThreatIdForRemediation}
               />
             )}
 

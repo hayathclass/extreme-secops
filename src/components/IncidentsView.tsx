@@ -4,7 +4,6 @@ import {
   FolderGit2,
   Clock,
   CheckCircle,
-  ArrowRight,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
@@ -12,13 +11,11 @@ import {
 interface IncidentsViewProps {
   incidents: Incident[];
   onUpdateStatus: (incidentId: string, status: Incident['status']) => void;
-  onNavigateToRemediation: (threatId?: string) => void;
 }
 
 export const IncidentsView: React.FC<IncidentsViewProps> = ({
   incidents,
   onUpdateStatus,
-  onNavigateToRemediation,
 }) => {
   const [filter, setFilter] = useState<'ALL' | 'OPEN' | 'INVESTIGATING' | 'MITIGATED' | 'RESOLVED'>('ALL');
   const [expandedIncidentId, setExpandedIncidentId] = useState<string | null>(
@@ -225,15 +222,6 @@ export const IncidentsView: React.FC<IncidentsViewProps> = ({
                           <option value="RESOLVED">RESOLVED</option>
                         </select>
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={() => onNavigateToRemediation(incident.remediation?.threatId)}
-                        className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold flex items-center space-x-1.5 transition text-xs shadow-sm shadow-cyan-950"
-                      >
-                        <span>View Recommended Remediation</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
                     </div>
                   </div>
                 )}

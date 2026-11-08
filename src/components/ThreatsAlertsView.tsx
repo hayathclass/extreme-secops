@@ -11,7 +11,6 @@ import {
 interface ThreatsAlertsViewProps {
   threats: ThreatDetection[];
   target: Target;
-  onNavigateToRemediation: (threatId?: string) => void;
   onNavigateToIncident: (threatId: string) => void;
   onDeleteThreat?: (threatId: string) => void;
   onClearAllThreats?: () => void;
@@ -20,7 +19,6 @@ interface ThreatsAlertsViewProps {
 export const ThreatsAlertsView: React.FC<ThreatsAlertsViewProps> = ({
   threats,
   target,
-  onNavigateToRemediation,
   onNavigateToIncident,
   onDeleteThreat,
   onClearAllThreats,
@@ -263,23 +261,14 @@ export const ThreatsAlertsView: React.FC<ThreatsAlertsViewProps> = ({
                     )}
                   </div>
 
-                  {/* Footer Action - only investigation and remediation */}
-                  <div className="pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 font-sans">
+                  {/* Footer Action */}
+                  <div className="pt-3 border-t border-slate-800 flex flex-wrap items-center justify-end gap-2 font-sans">
                     <button
                       type="button"
                       onClick={() => onNavigateToIncident(threat.id)}
-                      className="text-xs text-slate-400 hover:text-slate-200 flex items-center space-x-1 font-semibold"
+                      className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold flex items-center space-x-1.5 transition shadow-sm shadow-cyan-950 text-xs"
                     >
                       <span>View Incident Investigation</span>
-                      <ArrowRight className="w-3 h-3" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => onNavigateToRemediation(threat.id)}
-                      className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold flex items-center space-x-1.5 transition shadow-sm shadow-cyan-950"
-                    >
-                      <span>View Recommended Solution</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </div>

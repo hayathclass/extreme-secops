@@ -6,14 +6,12 @@ import {
   Terminal,
   AlertTriangle,
   FolderGit2,
-  Wrench,
   Bot,
   FileText,
   PlusCircle,
   ChevronDown,
   UploadCloud,
   Globe,
-  Radio,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -206,7 +204,6 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex space-x-1 overflow-x-auto py-1 scrollbar-none border-t border-slate-800/60">
           {[
             { id: 'dashboard', label: 'Dashboard', icon: Activity, count: null },
-            { id: 'noc', label: 'Live NOC Watchdog', icon: Radio, count: null, isLive: true },
             { id: 'logs', label: 'Live Logs', icon: Terminal, count: logCount },
             {
               id: 'threats',
@@ -216,7 +213,6 @@ export const Header: React.FC<HeaderProps> = ({
               alert: threatCount > 0,
             },
             { id: 'incidents', label: 'Incidents', icon: FolderGit2, count: incidentCount },
-            { id: 'remediation', label: 'Remediation', icon: Wrench, count: null },
             { id: 'analyst', label: 'Extreme Analyst', icon: Bot, count: null },
             { id: 'report', label: 'Report', icon: FileText, count: null },
           ].map((tab) => {
@@ -235,12 +231,6 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <Icon className={`w-3.5 h-3.5 ${active ? 'text-cyan-400' : 'text-slate-400'}`} />
                 <span>{tab.label}</span>
-                {tab.isLive && (
-                  <span className="flex h-2 w-2 relative ml-0.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-                )}
                 {tab.count !== null && tab.count !== undefined && (
                   <span
                     className={`ml-1 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold ${

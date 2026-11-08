@@ -10,7 +10,6 @@ import {
   ArrowRight,
   Zap,
   Globe,
-  Radio,
   RefreshCw,
   Lock,
   Server,
@@ -202,15 +201,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <span>Run Real Security Scan</span>
                 </>
               )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onNavigate('noc')}
-              className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 font-bold text-xs flex items-center space-x-1.5 transition"
-            >
-              <Radio className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Multi-Site Watchdog</span>
             </button>
           </div>
         </form>

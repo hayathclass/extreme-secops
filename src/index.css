@@ -2,11 +2,17 @@
 
 @layer base {
   body {
-    background-color: #090d14;
+    background-color: #06090e;
     color: #e2e8f0;
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(6, 182, 212, 0.05) 0%, transparent 40%),
+      radial-gradient(circle at 85% 10%, rgba(16, 185, 129, 0.04) 0%, transparent 30%),
+      radial-gradient(rgba(14, 165, 233, 0.06) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 24px 24px;
+    background-attachment: fixed;
   }
 
   code, pre, .font-mono {
@@ -14,33 +20,66 @@
   }
 }
 
-/* Crisp dark security-console scrollbars */
+/* Crisp tactical terminal scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: #090d14;
+  background: #06090e;
 }
 ::-webkit-scrollbar-thumb {
   background: #1e293b;
-  border-radius: 3px;
+  border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #0ea5e9;
 }
 
-@keyframes pulseGlow {
+/* Tactical cyber animations */
+@keyframes radarSweep {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes cyberGlow {
   0%, 100% {
-    opacity: 1;
-    transform: scale(1);
+    box-shadow: 0 0 15px -3px rgba(6, 182, 212, 0.15), 0 0 6px -2px rgba(6, 182, 212, 0.1);
   }
   50% {
-    opacity: 0.6;
-    transform: scale(1.05);
+    box-shadow: 0 0 25px -3px rgba(6, 182, 212, 0.3), 0 0 10px -2px rgba(6, 182, 212, 0.2);
   }
 }
 
-.animate-pulse-glow {
-  animation: pulseGlow 2.5s infinite ease-in-out;
+@keyframes pulseBorder {
+  0%, 100% {
+    border-color: rgba(6, 182, 212, 0.3);
+  }
+  50% {
+    border-color: rgba(6, 182, 212, 0.7);
+  }
 }
+
+.animate-cyber-glow {
+  animation: cyberGlow 3s infinite ease-in-out;
+}
+
+.animate-pulse-border {
+  animation: pulseBorder 2s infinite ease-in-out;
+}
+
+/* Glassmorphism tactical card */
+.cyber-card {
+  background: rgba(11, 17, 29, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cyber-card:hover {
+  border-color: rgba(6, 182, 212, 0.35);
+  box-shadow: 0 12px 40px 0 rgba(6, 182, 212, 0.08);
+}
+

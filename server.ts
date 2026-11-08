@@ -334,6 +334,118 @@ async function probePath(baseUrl: string, testPath: string): Promise<{
   }
 }
 
+// Helper: Granular Client & Server Device Detection
+export function parseDeviceDetails(
+  ua: string = '',
+  clientHints?: {
+    device?: string;
+    clientDevice?: string;
+    isMobile?: boolean;
+    screenWidth?: number;
+    screenHeight?: number;
+    maxTouchPoints?: number;
+    hasBattery?: boolean;
+  }
+): string {
+  if (clientHints?.clientDevice && clientHints.clientDevice !== 'Desktop' && clientHints.clientDevice !== 'Desktop PC') {
+    return clientHints.clientDevice;
+  }
+  if (clientHints?.device && clientHints.device !== 'Desktop' && clientHints.device !== 'Desktop PC') {
+    return clientHints.device;
+  }
+
+  const uaLower = (ua || '').toLowerCase();
+  const maxTouch = clientHints?.maxTouchPoints ?? 0;
+  const sw = clientHints?.screenWidth ?? 0;
+  const sh = clientHints?.screenHeight ?? 0;
+  const isTouch = maxTouch > 0 || Boolean(clientHints?.isMobile);
+  const hasBattery = Boolean(clientHints?.hasBattery);
+
+  // 1. Apple iPad (iPadOS)
+  const isIpad =
+    uaLower.includes('ipad') ||
+    (maxTouch > 1 && (uaLower.includes('macintosh') || uaLower.includes('macintel')));
+  if (isIpad) {
+    return 'Apple iPad (iPadOS)';
+  }
+
+  // 2. Apple iPhone (iOS)
+  if (uaLower.includes('iphone')) {
+    const iosMatch = ua.match(/OS (\d+[_.]\d+)/);
+    const iosVer = iosMatch ? ` (iOS ${iosMatch[1].replace('_', '.')})` : ' (iOS)';
+
+    const w = Math.min(sw, sh);
+    const h = Math.max(sw, sh);
+    let model = 'Apple iPhone';
+    if (w === 430 && h === 932) model = 'iPhone 15/14 Pro Max';
+    else if (w === 393 && h === 852) model = 'iPhone 15/14 Pro';
+    else if (w === 428 && h === 926) model = 'iPhone 14 Plus / 13 Pro Max';
+    else if (w === 390 && h === 844) model = 'iPhone 14 / 13 / 12';
+    else if (w === 375 && h === 812) model = 'iPhone 13 mini / 12 mini / X';
+    else if (w === 414 && h === 896) model = 'iPhone 11 / XR / XS Max';
+    else if (w === 375 && h === 667) model = 'iPhone SE / 8';
+
+    return `${model}${iosVer}`;
+  }
+
+  // 3. Apple Mac (MacBook Laptop vs Mac Desktop)
+  if (uaLower.includes('macintosh') || uaLower.includes('mac os x')) {
+    const macMatch = ua.match(/Mac OS X ([\d_]+)/);
+    const macVer = macMatch ? `macOS ${macMatch[1].replace(/_/g, '.')}` : 'macOS';
+    const isMacBook = hasBattery || (sw >= 1280 && sw <= 1728) || isTouch;
+    return isMacBook ? `MacBook (${macVer} Laptop)` : `Apple Mac (${macVer} Desktop)`;
+  }
+
+  // 4. Android Mobile & Tablet
+  if (uaLower.includes('android')) {
+    const isTablet = !uaLower.includes('mobile') || (sw >= 768 && sh >= 1024);
+    const avMatch = ua.match(/Android\s+([\d.]+)/i);
+    const androidVer = avMatch ? `Android ${avMatch[1]}` : 'Android';
+
+    let brand = isTablet ? 'Android Tablet' : 'Android Mobile';
+    if (uaLower.includes('samsung') || uaLower.includes('sm-')) {
+      brand = isTablet ? 'Samsung Galaxy Tab' : 'Samsung Galaxy';
+    } else if (uaLower.includes('pixel')) {
+      const pxMatch = ua.match(/Pixel\s*([0-9a-zA-Z\s]+)/i);
+      brand = pxMatch ? `Google Pixel ${pxMatch[1].trim()}` : 'Google Pixel';
+    } else if (uaLower.includes('oneplus')) {
+      brand = 'OnePlus Mobile';
+    } else if (uaLower.includes('xiaomi') || uaLower.includes('redmi') || uaLower.includes('poco')) {
+      brand = 'Xiaomi / Redmi Mobile';
+    } else if (uaLower.includes('vivo')) {
+      brand = 'Vivo Mobile';
+    } else if (uaLower.includes('oppo')) {
+      brand = 'Oppo Mobile';
+    } else if (uaLower.includes('motorola') || uaLower.includes('moto')) {
+      brand = 'Motorola Mobile';
+    }
+    return `${brand} (${androidVer})`;
+  }
+
+  // 5. Windows (Laptop vs Desktop PC)
+  if (uaLower.includes('windows')) {
+    let winVer = 'Windows 11/10';
+    if (uaLower.includes('windows nt 6.3')) winVer = 'Windows 8.1';
+    else if (uaLower.includes('windows nt 6.1')) winVer = 'Windows 7';
+
+    const isLaptop = isTouch || hasBattery || (sw > 0 && sw <= 1600 && sh <= 900);
+    return isLaptop ? `${winVer} Laptop` : `${winVer} PC`;
+  }
+
+  // 6. Linux
+  if (uaLower.includes('linux')) {
+    const isLinuxLaptop = isTouch || hasBattery || (sw > 0 && sw <= 1600);
+    return isLinuxLaptop ? 'Linux Laptop' : 'Linux Desktop';
+  }
+
+  // 7. ChromeOS / Chromebook
+  if (uaLower.includes('cros')) {
+    return 'Chromebook Laptop';
+  }
+
+  return 'Desktop PC';
+}
+
 async function createServer() {
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
@@ -387,6 +499,91 @@ async function createServer() {
   var initialSent = false;
   var leaveReported = false;
 
+  function detectClientDevice() {
+    try {
+      var ua = navigator.userAgent || '';
+      var uaLower = ua.toLowerCase();
+      var platform = navigator.platform || '';
+      var maxTouch = navigator.maxTouchPoints || 0;
+      var sw = (window.screen && window.screen.width) || 0;
+      var sh = (window.screen && window.screen.height) || 0;
+      var isTouch = maxTouch > 0 || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+      var hasBattery = 'getBattery' in navigator;
+
+      if (/ipad/i.test(uaLower) || (maxTouch > 1 && (/macintosh|mac os x/i.test(uaLower) || platform === 'MacIntel'))) {
+        return 'Apple iPad (iPadOS)';
+      }
+
+      if (/iphone/i.test(uaLower) || platform === 'iPhone') {
+        var iosMatch = ua.match(/OS (\\d+[_.]\\d+)/);
+        var iosVer = iosMatch ? ' (iOS ' + iosMatch[1].replace('_', '.') + ')' : ' (iOS)';
+        var w = Math.min(sw, sh);
+        var h = Math.max(sw, sh);
+        var model = 'Apple iPhone';
+        if (w === 430 && h === 932) model = 'iPhone 15/14 Pro Max';
+        else if (w === 393 && h === 852) model = 'iPhone 15/14 Pro';
+        else if (w === 428 && h === 926) model = 'iPhone 14 Plus / 13 Pro Max';
+        else if (w === 390 && h === 844) model = 'iPhone 14 / 13 / 12';
+        else if (w === 375 && h === 812) model = 'iPhone 13 mini / 12 mini / X';
+        else if (w === 414 && h === 896) model = 'iPhone 11 / XR / XS Max';
+        else if (w === 375 && h === 667) model = 'iPhone SE / 8';
+        return model + iosVer;
+      }
+
+      if (/android/i.test(uaLower)) {
+        var isTablet = !/mobile/i.test(uaLower) || (sw >= 768 && sh >= 1024);
+        var androidVer = '';
+        var avMatch = ua.match(/Android\\s+([\\d.]+)/i);
+        if (avMatch) androidVer = ' (Android ' + avMatch[1] + ')';
+        var brand = isTablet ? 'Android Tablet' : 'Android Mobile';
+        if (/samsung|sm-[a-z0-9]+/i.test(uaLower)) {
+          brand = isTablet ? 'Samsung Galaxy Tab' : 'Samsung Galaxy';
+        } else if (/pixel/i.test(uaLower)) {
+          var pxMatch = ua.match(/Pixel\\s*([0-9a-zA-Z\\s]+)/i);
+          brand = pxMatch ? 'Google Pixel ' + pxMatch[1].trim() : 'Google Pixel';
+        } else if (/oneplus/i.test(uaLower)) {
+          brand = 'OnePlus Mobile';
+        } else if (/xiaomi|redmi|poco/i.test(uaLower)) {
+          brand = 'Xiaomi / Redmi Mobile';
+        } else if (/vivo/i.test(uaLower)) {
+          brand = 'Vivo Mobile';
+        } else if (/oppo/i.test(uaLower)) {
+          brand = 'Oppo Mobile';
+        } else if (/motorola|moto/i.test(uaLower)) {
+          brand = 'Motorola Mobile';
+        }
+        return brand + androidVer;
+      }
+
+      if (/windows/i.test(uaLower)) {
+        var winVer = 'Windows 11/10';
+        if (/windows nt 6\\.3/i.test(uaLower)) winVer = 'Windows 8.1';
+        else if (/windows nt 6\\.1/i.test(uaLower)) winVer = 'Windows 7';
+        var isLaptop = isTouch || hasBattery || (sw > 0 && sw <= 1600 && sh <= 900);
+        return isLaptop ? winVer + ' Laptop' : winVer + ' PC';
+      }
+
+      if (/macintosh|mac os x/i.test(uaLower)) {
+        var macVer = 'macOS';
+        var mvMatch = ua.match(/Mac OS X ([\\d_]+)/);
+        if (mvMatch) macVer = 'macOS ' + mvMatch[1].replace(/_/g, '.');
+        var isMacBook = hasBattery || (sw >= 1280 && sw <= 1728) || isTouch;
+        return isMacBook ? 'MacBook (' + macVer + ' Laptop)' : 'Apple Mac (' + macVer + ' Desktop)';
+      }
+
+      if (/linux/i.test(uaLower)) {
+        return (isTouch || hasBattery || (sw > 0 && sw <= 1600)) ? 'Linux Laptop' : 'Linux Desktop';
+      }
+
+      if (/cros/i.test(uaLower)) {
+        return 'Chromebook Laptop';
+      }
+    } catch(e) {}
+    return 'Desktop PC';
+  }
+
+  var clientDeviceCached = detectClientDevice();
+
   function transmit(data) {
     // If user has exited/closed tab, do not transmit trailing background fetches or stream packets
     if (leaveReported && data.eventType !== 'SESSION_END') {
@@ -401,6 +598,7 @@ async function createServer() {
         path: window.location.pathname || '/',
         referrer: document.referrer || '',
         userAgent: navigator.userAgent,
+        clientDevice: clientDeviceCached,
         clientPublicIp: cachedClientIp || undefined
       }, data);
 
@@ -1399,23 +1597,7 @@ async function createServer() {
     const userAgent = (body.userAgent || (req.headers['user-agent'] as string) || 'Live Visitor Browser');
 
     // Granular Device Type Parsing
-    let deviceType = 'Desktop';
-    const uaLower = userAgent.toLowerCase();
-    if (uaLower.includes('iphone')) {
-      deviceType = 'iPhone (iOS)';
-    } else if (uaLower.includes('ipad')) {
-      deviceType = 'iPad (iPadOS)';
-    } else if (uaLower.includes('android')) {
-      deviceType = uaLower.includes('mobile') ? 'Android Mobile' : 'Android Tablet';
-    } else if (uaLower.includes('macintosh') || uaLower.includes('mac os')) {
-      deviceType = 'Mac (macOS)';
-    } else if (uaLower.includes('windows')) {
-      deviceType = 'Windows PC';
-    } else if (uaLower.includes('linux')) {
-      deviceType = 'Linux Desktop';
-    } else if (uaLower.includes('curl') || uaLower.includes('postman') || uaLower.includes('python')) {
-      deviceType = 'API Client';
-    }
+    const deviceType = parseDeviceDetails(userAgent, body);
 
     const targetId = body.targetId || (req.headers['x-target-id'] as string) || 'target-atc-simulator';
     const method = (body.method || 'GET').toUpperCase();
@@ -1561,7 +1743,7 @@ async function createServer() {
 
       visitorMap.set(ip, {
         ip,
-        device: latestEvent.clientGeo?.device || (latestEvent.userAgent.includes('Mobile') ? 'Mobile Device' : 'Desktop'),
+        device: latestEvent.clientGeo?.device || parseDeviceDetails(latestEvent.userAgent),
         country: latestEvent.clientGeo?.country,
         city: latestEvent.clientGeo?.city,
         firstSeen: oldestEvent.timestamp,
@@ -1657,7 +1839,56 @@ async function createServer() {
     var hits = 0;
     var publicIp = '';
     var isConnected = true;
-    var dev = /iPhone/i.test(navigator.userAgent) ? 'iPhone (iOS)' : /Android/i.test(navigator.userAgent) ? 'Android Mobile' : /iPad/i.test(navigator.userAgent) ? 'iPad (iPadOS)' : /Mac/i.test(navigator.userAgent) ? 'Mac (macOS)' : 'Desktop';
+    function detectClientDev() {
+      try {
+        var ua = navigator.userAgent || '';
+        var uaL = ua.toLowerCase();
+        var maxT = navigator.maxTouchPoints || 0;
+        var sw = (window.screen && window.screen.width) || 0;
+        var sh = (window.screen && window.screen.height) || 0;
+        var isTouch = maxT > 0 || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+        var hasBat = 'getBattery' in navigator;
+
+        if (/ipad/i.test(uaL) || (maxT > 1 && (/macintosh|mac os x/i.test(uaL) || navigator.platform === 'MacIntel'))) {
+          return 'Apple iPad (iPadOS)';
+        }
+        if (/iphone/i.test(uaL)) {
+          var iosM = ua.match(/OS (\\d+[_.]\\d+)/);
+          var iosV = iosM ? ' (iOS ' + iosM[1].replace('_', '.') + ')' : ' (iOS)';
+          var w = Math.min(sw, sh);
+          var h = Math.max(sw, sh);
+          var m = 'Apple iPhone';
+          if (w === 430 && h === 932) m = 'iPhone 15/14 Pro Max';
+          else if (w === 393 && h === 852) m = 'iPhone 15/14 Pro';
+          else if (w === 428 && h === 926) m = 'iPhone 14 Plus / 13 Pro Max';
+          else if (w === 390 && h === 844) m = 'iPhone 14 / 13 / 12';
+          else if (w === 375 && h === 812) m = 'iPhone 13 mini / 12 mini / X';
+          else if (w === 414 && h === 896) m = 'iPhone 11 / XR';
+          return m + iosV;
+        }
+        if (/android/i.test(uaL)) {
+          var isTab = !/mobile/i.test(uaL) || (sw >= 768 && sh >= 1024);
+          var brand = isTab ? 'Android Tablet' : 'Android Mobile';
+          if (/samsung|sm-[a-z0-9]+/i.test(uaL)) brand = isTab ? 'Samsung Galaxy Tab' : 'Samsung Galaxy';
+          else if (/pixel/i.test(uaL)) brand = 'Google Pixel';
+          else if (/oneplus/i.test(uaL)) brand = 'OnePlus Mobile';
+          else if (/xiaomi|redmi/i.test(uaL)) brand = 'Xiaomi / Redmi Mobile';
+          var av = ua.match(/Android\\s+([\\d.]+)/i);
+          return brand + (av ? ' (Android ' + av[1] + ')' : '');
+        }
+        if (/windows/i.test(uaL)) {
+          return (isTouch || hasBat || (sw <= 1600 && sh <= 900)) ? 'Windows 11/10 Laptop' : 'Windows 11/10 PC';
+        }
+        if (/macintosh|mac os x/i.test(uaL)) {
+          return (hasBat || (sw >= 1280 && sw <= 1728) || isTouch) ? 'MacBook (macOS Laptop)' : 'Apple Mac (macOS Desktop)';
+        }
+        if (/linux/i.test(uaL)) {
+          return (isTouch || hasBat || sw <= 1600) ? 'Linux Laptop' : 'Linux Desktop';
+        }
+      } catch(e) {}
+      return 'Desktop PC';
+    }
+    var dev = detectClientDev();
     document.getElementById('devType').textContent = dev;
 
     function sendHit(endpoint, status, eventType, flagReason) {
@@ -1674,8 +1905,9 @@ async function createServer() {
           status: status || 200,
           eventType: eventType || 'PAGEVIEW',
           clientPublicIp: publicIp || undefined,
+          clientDevice: dev,
           userAgent: navigator.userAgent,
-          flagReason: flagReason || ('Real mobile user navigated ' + endpoint)
+          flagReason: flagReason || ('Real user navigated ' + endpoint)
         })
       }).then(function() {
         document.getElementById('statusMsg').textContent = '✓ Live Event: ' + (eventType || 'PAGEVIEW') + ' (' + endpoint + ')';

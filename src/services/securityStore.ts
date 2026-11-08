@@ -336,7 +336,7 @@ class SecurityStore {
 
       map.set(ip, {
         ip,
-        device: latestEvent.clientGeo?.device || (latestEvent.userAgent.includes('Mobile') ? 'Mobile Device' : 'Desktop'),
+        device: latestEvent.clientGeo?.device || this.parseDeviceFromUserAgent(latestEvent.userAgent),
         country: latestEvent.clientGeo?.country,
         city: latestEvent.clientGeo?.city,
         firstSeen: oldestEvent.timestamp,
@@ -356,6 +356,60 @@ class SecurityStore {
       if (!a.isOnline && b.isOnline) return 1;
       return new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime();
     });
+  }
+
+  public parseDeviceFromUserAgent(ua: string = ''): string {
+    const uaLower = (ua || '').toLowerCase();
+    if (!uaLower) return 'Desktop PC';
+
+    // 1. iPad
+    if (uaLower.includes('ipad') || (uaLower.includes('macintosh') && uaLower.includes('mobile'))) {
+      return 'Apple iPad (iPadOS)';
+    }
+
+    // 2. iPhone
+    if (uaLower.includes('iphone')) {
+      const iosMatch = ua.match(/OS (\d+[_.]\d+)/);
+      const iosVer = iosMatch ? ` (iOS ${iosMatch[1].replace('_', '.')})` : ' (iOS)';
+      return `Apple iPhone${iosVer}`;
+    }
+
+    // 3. Android
+    if (uaLower.includes('android')) {
+      const isTablet = !uaLower.includes('mobile');
+      const avMatch = ua.match(/Android\s+([\d.]+)/i);
+      const androidVer = avMatch ? `Android ${avMatch[1]}` : 'Android';
+
+      let brand = isTablet ? 'Android Tablet' : 'Android Mobile';
+      if (uaLower.includes('samsung') || uaLower.includes('sm-')) {
+        brand = isTablet ? 'Samsung Galaxy Tab' : 'Samsung Galaxy';
+      } else if (uaLower.includes('pixel')) {
+        brand = 'Google Pixel';
+      } else if (uaLower.includes('oneplus')) {
+        brand = 'OnePlus Mobile';
+      } else if (uaLower.includes('xiaomi') || uaLower.includes('redmi') || uaLower.includes('poco')) {
+        brand = 'Xiaomi / Redmi Mobile';
+      }
+      return `${brand} (${androidVer})`;
+    }
+
+    // 4. Windows Laptop vs PC
+    if (uaLower.includes('windows')) {
+      const isLaptop = uaLower.includes('touch') || uaLower.includes('mobile');
+      return isLaptop ? 'Windows 11/10 Laptop' : 'Windows PC';
+    }
+
+    // 5. Mac
+    if (uaLower.includes('macintosh') || uaLower.includes('mac os x')) {
+      return 'MacBook (macOS)';
+    }
+
+    // 6. Linux
+    if (uaLower.includes('linux')) {
+      return 'Linux PC';
+    }
+
+    return 'Desktop PC';
   }
 
   public getActiveVisitorsCount(targetId: string): number {

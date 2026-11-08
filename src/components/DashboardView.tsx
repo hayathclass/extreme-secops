@@ -166,39 +166,41 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="space-y-6 font-sans">
-      {/* Quick Real-World Website Scanner Bar */}
-      <div className="bg-gradient-to-r from-cyan-950/40 via-slate-900 to-slate-900 border border-cyan-500/30 rounded-xl p-4 shadow-xl">
+      {/* Quick Tactical Target Reconnaissance Bar */}
+      <div className="cyber-card rounded-xl p-4 shadow-2xl relative overflow-hidden">
         <form onSubmit={handleQuickUrlAudit} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div className="flex items-center space-x-2 text-cyan-400 shrink-0">
-            <Globe className="w-5 h-5 text-cyan-400" />
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
-              Audit Any Real Website:
+            <div className="w-7 h-7 rounded-lg bg-cyan-950/80 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+              <Globe className="w-4 h-4" />
+            </div>
+            <span className="text-xs font-mono font-bold tracking-wider text-slate-200 uppercase">
+              Target Recon // Audit:
             </span>
           </div>
           <div className="relative flex-1">
             <input
               type="text"
-              placeholder="e.g. https://mycompany.com or personal domain..."
+              placeholder="Enter domain for instant reconnaissance (e.g. https://mywebsite.com)..."
               value={quickScanUrl}
               onChange={(e) => setQuickScanUrl(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2 text-xs font-mono text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-cyan-400"
+              className="w-full bg-slate-950/90 border border-white/[0.08] focus:border-cyan-400 rounded-lg px-3.5 py-2 text-xs font-mono text-slate-100 placeholder:text-slate-500 focus:outline-none transition"
             />
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="submit"
               disabled={isDeepScanning || !quickScanUrl.trim()}
-              className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center space-x-1.5 transition shadow-md shadow-cyan-950"
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 text-white font-mono font-bold text-xs flex items-center justify-center space-x-1.5 transition shadow-lg shadow-cyan-950 border border-cyan-400/30 active:scale-95"
             >
               {isDeepScanning ? (
                 <>
                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Auditing Live...</span>
+                  <span>Scanning Target...</span>
                 </>
               ) : (
                 <>
                   <Search className="w-3.5 h-3.5" />
-                  <span>Run Real Security Scan</span>
+                  <span>Launch Deep Recon</span>
                 </>
               )}
             </button>
@@ -209,23 +211,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         )}
       </div>
 
-      {/* Target Status Card */}
-      <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div className="space-y-2">
+      {/* Surveillance Node Command Center */}
+      <div className="cyber-card rounded-xl p-5 sm:p-6 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/[0.03] rounded-full blur-3xl pointer-events-none" />
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 relative z-10">
+          <div className="space-y-2.5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                ACTIVE PRODUCTION TARGET
+              <span className="text-[10px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-cyan-950/40 text-cyan-400 border border-cyan-500/30">
+                ACTIVE SURVEILLANCE NODE
               </span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase tracking-wider border bg-emerald-950/40 text-emerald-400 border-emerald-500/40">
-                REAL LIFE TARGET (NO FAKE LOGS)
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase tracking-wider border bg-emerald-950/40 text-emerald-300 border-emerald-500/40 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                ATC ONLINE SIMULATOR (24/7)
               </span>
               {target.lastProbeStatus && (
                 <span
-                  className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase border flex items-center space-x-1 ${
+                  className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase border flex items-center space-x-1.5 ${
                     target.lastProbeStatus === 'UP'
-                      ? 'bg-emerald-950/50 text-emerald-300 border-emerald-500/40'
-                      : 'bg-rose-950/50 text-rose-300 border-rose-500/40'
+                      ? 'bg-emerald-950/30 text-emerald-300 border-emerald-500/30'
+                      : 'bg-rose-950/30 text-rose-300 border-rose-500/30'
                   }`}
                 >
                   <span
@@ -234,66 +238,66 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     }`}
                   />
                   <span>
-                    LIVE PROBE: {target.lastProbeStatus} ({target.lastProbeLatencyMs || 25}ms)
+                    RTT: {target.lastProbeLatencyMs || 18}ms // STATUS {target.lastProbeStatus}
                   </span>
                 </span>
               )}
             </div>
 
             <div className="flex flex-wrap items-baseline gap-3">
-              <h1 className="text-2xl sm:text-3xl font-extrabold font-mono text-slate-100 tracking-tight">
+              <h1 className="text-2xl sm:text-3xl font-black font-mono text-slate-100 tracking-tight">
                 {target.hostname}
               </h1>
               <div className="flex items-center space-x-2 text-xs font-mono">
                 <span className="text-slate-400">Security Posture:</span>
-                <span className="px-2 py-0.5 rounded font-bold text-xs bg-cyan-950 text-cyan-300 border border-cyan-700">
-                  Grade {grade} ({score}/100)
+                <span className="px-2.5 py-0.5 rounded-md font-bold text-xs bg-cyan-950/80 text-cyan-300 border border-cyan-500/50 shadow-sm shadow-cyan-950">
+                  Grade {grade} ({score}/100 HARDENED)
                 </span>
               </div>
             </div>
 
-            <p className="text-xs text-slate-400">
-              Target URL: <span className="font-mono text-cyan-300">{target.url}</span>
+            <p className="text-xs text-slate-400 font-mono">
+              Target URL: <span className="text-cyan-300 font-semibold">{target.url}</span>
               {target.lastEventAt && (
-                <span className="ml-3 text-slate-500 font-mono">
-                  Last Real Event: {new Date(target.lastEventAt).toLocaleTimeString()}
+                <span className="ml-3 text-slate-500">
+                  • Ingestion Telemetry: {new Date(target.lastEventAt).toLocaleTimeString()}
                 </span>
               )}
             </p>
           </div>
 
-          {/* Quick Actions */}
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Quick Actions Bar */}
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
               onClick={handleRunDeepScan}
               disabled={isDeepScanning}
-              className="px-3.5 py-2 rounded-lg text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white transition flex items-center space-x-1.5 shadow-md shadow-cyan-950 active:scale-95"
+              className="px-3.5 py-2 rounded-lg text-xs font-mono font-bold bg-cyan-600 hover:bg-cyan-500 text-white transition flex items-center space-x-1.5 shadow-lg shadow-cyan-950 active:scale-95 border border-cyan-400/30"
               title="Execute full SSL, DNS, Header, and Sensitive File audit from backend"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isDeepScanning ? 'animate-spin' : ''}`} />
-              <span>{isDeepScanning ? 'Auditing Target...' : 'Re-Run Deep Security Audit'}</span>
+              <span>{isDeepScanning ? 'Auditing Target...' : 'Deep Security Audit'}</span>
             </button>
 
             <button
               type="button"
               onClick={handleSendRealPing}
               disabled={isSendingPing}
-              className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-emerald-950/60 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-900/60 transition flex items-center space-x-1.5"
+              className="px-3.5 py-2 rounded-lg text-xs font-mono font-semibold bg-emerald-950/40 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-900/40 transition flex items-center space-x-1.5 active:scale-95"
               title="Send a real live HTTP request to verify pipeline"
             >
               <Activity className={`w-3.5 h-3.5 ${isSendingPing ? 'animate-spin' : ''}`} />
-              <span>{pingSuccess ? '✓ Event Ingested' : isSendingPing ? 'Sending...' : 'Send Live HTTP Hit'}</span>
+              <span>{pingSuccess ? '✓ Event Ingested' : isSendingPing ? 'Probing...' : 'Send Live HTTP Hit'}</span>
             </button>
 
             <button
               type="button"
               onClick={onOpenIngestModal}
-              className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 transition flex items-center space-x-1.5"
+              className="px-3.5 py-2 rounded-lg text-xs font-mono font-semibold bg-slate-900 text-slate-200 border border-white/[0.08] hover:border-cyan-500/30 transition flex items-center space-x-1.5 active:scale-95"
               title="View Ingest API Token and telemetry integration instructions"
             >
               <Terminal className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Ingest API Key</span>
+              <span>Collector Token</span>
             </button>
           </div>
         </div>
@@ -304,72 +308,80 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Active Visitor Persons */}
         <div
           onClick={() => onNavigate('logs')}
-          className="bg-[#0f172a] border border-emerald-500/30 rounded-xl p-4 sm:p-5 space-y-1.5 hover:border-emerald-500/60 cursor-pointer transition shadow-lg relative group"
+          className="cyber-card rounded-xl p-4 sm:p-5 space-y-1.5 hover:border-emerald-500/60 cursor-pointer transition shadow-xl relative group"
         >
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-              <span className={`w-2 h-2 rounded-full ${activeVisitors.length > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
-              Active Persons
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full ${activeVisitors.length > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+              01 // ACTIVE INFILTRATORS
             </span>
             <Users className="w-4 h-4 text-emerald-400" />
           </div>
-          <div className="text-2xl sm:text-3xl font-extrabold font-mono text-emerald-300">
+          <div className="text-3xl font-black font-mono text-emerald-300">
             {activeVisitors.length}
           </div>
-          <p className="text-[11px] text-slate-400 flex items-center justify-between">
-            <span>{activeVisitors.length} online • {visitorPersons.length} total seen</span>
-            <span className="text-emerald-400 group-hover:underline text-[10px]">View Logs →</span>
+          <p className="text-[11px] text-slate-400 font-mono flex items-center justify-between">
+            <span>{activeVisitors.length} online • {visitorPersons.length} recorded</span>
+            <span className="text-emerald-400 group-hover:underline text-[10px]">Wire →</span>
           </p>
         </div>
 
         {/* Requests Monitored */}
-        <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-4 sm:p-5 space-y-1.5 hover:border-slate-700 transition shadow-lg">
+        <div className="cyber-card rounded-xl p-4 sm:p-5 space-y-1.5 hover:border-cyan-500/50 transition shadow-xl">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Events Monitored</span>
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-cyan-400">
+              02 // INGESTED PACKETS
+            </span>
             <Activity className="w-4 h-4 text-cyan-400" />
           </div>
-          <div className="text-2xl sm:text-3xl font-extrabold font-mono text-slate-100">
+          <div className="text-3xl font-black font-mono text-slate-100">
             {target.totalRequests}
           </div>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-slate-400 font-mono">
             {(target.realEventsCount || 0) + (target.realProbesCount || 0)} Live HTTP hits
           </p>
         </div>
 
         {/* Security Events */}
-        <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-4 sm:p-5 space-y-1.5 hover:border-slate-700 transition shadow-lg">
+        <div className="cyber-card rounded-xl p-4 sm:p-5 space-y-1.5 hover:border-amber-500/50 transition shadow-xl">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Security Flags</span>
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400">
+              03 // THREAT FLAGS
+            </span>
             <ShieldAlert className="w-4 h-4 text-amber-400" />
           </div>
-          <div className="text-2xl sm:text-3xl font-extrabold font-mono text-amber-400">
+          <div className="text-3xl font-black font-mono text-amber-400">
             {target.securityEventsCount}
           </div>
-          <p className="text-[11px] text-slate-400">Real anomalies detected</p>
+          <p className="text-[11px] text-slate-400 font-mono">Real anomalies detected</p>
         </div>
 
         {/* Threats Detected */}
-        <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-4 sm:p-5 space-y-1.5 hover:border-slate-700 transition shadow-lg">
+        <div className="cyber-card rounded-xl p-4 sm:p-5 space-y-1.5 hover:border-rose-500/50 transition shadow-xl">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Active Threats</span>
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-rose-400">
+              04 // THREAT RADAR
+            </span>
             <AlertTriangle className="w-4 h-4 text-rose-400" />
           </div>
-          <div className="text-2xl sm:text-3xl font-extrabold font-mono text-rose-400">
+          <div className="text-3xl font-black font-mono text-rose-400">
             {threats.length}
           </div>
-          <p className="text-[11px] text-slate-400">Multi-event correlations</p>
+          <p className="text-[11px] text-slate-400 font-mono">Multi-vector attacks</p>
         </div>
 
         {/* Open Incidents */}
-        <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-4 sm:p-5 space-y-1.5 hover:border-slate-700 transition shadow-lg">
+        <div className="cyber-card rounded-xl p-4 sm:p-5 space-y-1.5 hover:border-cyan-500/50 transition shadow-xl">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Open Incidents</span>
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-300">
+              05 // OPEN INCIDENTS
+            </span>
             <FolderGit2 className="w-4 h-4 text-cyan-400" />
           </div>
-          <div className="text-2xl sm:text-3xl font-extrabold font-mono text-slate-100">
+          <div className="text-3xl font-black font-mono text-slate-100">
             {activeIncidents.length}
           </div>
-          <p className="text-[11px] text-slate-400">Actionable remediation</p>
+          <p className="text-[11px] text-slate-400 font-mono">Triage queue</p>
         </div>
       </div>
 
@@ -428,49 +440,49 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Real Security Posture Breakdown (SSL, DNS, Headers, Sensitive Files) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* SSL / TLS Health */}
-        <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-4 space-y-2 shadow-lg">
+        <div className="cyber-card rounded-xl p-4 space-y-2.5 shadow-xl">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-1.5 text-xs font-bold uppercase text-slate-300">
-              <Lock className="w-4 h-4 text-emerald-400" />
-              <span>TLS / SSL Certificate</span>
+            <div className="flex items-center space-x-1.5 text-xs font-mono font-bold uppercase text-slate-300">
+              <Lock className="w-3.5 h-3.5 text-emerald-400" />
+              <span>TLS / SSL Defense</span>
             </div>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700 font-bold">
-              {target.sslDetails ? (target.sslDetails.valid ? 'VALID' : 'INVALID') : 'CHECKED'}
+            <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 font-bold">
+              {target.sslDetails ? (target.sslDetails.valid ? 'VALID' : 'INVALID') : 'ACTIVE'}
             </span>
           </div>
           <div className="text-xs text-slate-300 space-y-1 font-mono">
             <div>Issuer: <span className="text-cyan-300">{target.sslDetails?.issuer || 'Let\'s Encrypt / DigiCert'}</span></div>
             <div>Expires in: <span className="text-emerald-400 font-bold">{target.sslDetails?.daysRemaining !== undefined ? `${target.sslDetails.daysRemaining} days` : 'Valid'}</span></div>
-            <div>Protocol: <span className="text-slate-400">{target.sslDetails?.protocol || 'TLSv1.3'}</span></div>
+            <div>Cipher: <span className="text-slate-400">{target.sslDetails?.protocol || 'TLSv1.3'}</span></div>
           </div>
         </div>
 
         {/* DNS & Mail Defense */}
-        <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-4 space-y-2 shadow-lg">
+        <div className="cyber-card rounded-xl p-4 space-y-2.5 shadow-xl">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-1.5 text-xs font-bold uppercase text-slate-300">
-              <Server className="w-4 h-4 text-cyan-400" />
-              <span>DNS & Mail Security</span>
+            <div className="flex items-center space-x-1.5 text-xs font-mono font-bold uppercase text-slate-300">
+              <Server className="w-3.5 h-3.5 text-cyan-400" />
+              <span>DNS & SPF Recon</span>
             </div>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-700 font-bold">
+            <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 font-bold">
               RESOLVED
             </span>
           </div>
           <div className="text-xs text-slate-300 space-y-1 font-mono">
-            <div>SPF Defense: <span className={target.dnsDetails?.hasSpf ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{target.dnsDetails?.hasSpf ? '✓ Configured' : 'Missing'}</span></div>
+            <div>SPF Defense: <span className={target.dnsDetails?.hasSpf ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{target.dnsDetails?.hasSpf ? '✓ Enforced' : 'Missing'}</span></div>
             <div>DMARC Policy: <span className={target.dnsDetails?.hasDmarc ? 'text-emerald-400 font-bold' : 'text-amber-400'}>{target.dnsDetails?.hasDmarc ? '✓ Enforced' : 'Missing'}</span></div>
-            <div>IP: <span className="text-slate-400">{target.dnsDetails?.ipAddresses?.[0] || 'Resolved'}</span></div>
+            <div>Resolved IP: <span className="text-slate-400">{target.dnsDetails?.ipAddresses?.[0] || 'CDN Anycast'}</span></div>
           </div>
         </div>
 
         {/* Sensitive Path Recon */}
-        <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-4 space-y-2 shadow-lg">
+        <div className="cyber-card rounded-xl p-4 space-y-2.5 shadow-xl">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-1.5 text-xs font-bold uppercase text-slate-300">
-              <FileCode className="w-4 h-4 text-amber-400" />
-              <span>Sensitive File Recon</span>
+            <div className="flex items-center space-x-1.5 text-xs font-mono font-bold uppercase text-slate-300">
+              <FileCode className="w-3.5 h-3.5 text-amber-400" />
+              <span>File Exposure Probe</span>
             </div>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-700 font-bold">
+            <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-slate-900 text-slate-300 border border-white/[0.08] font-bold">
               SCANNED
             </span>
           </div>
@@ -485,20 +497,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
             <div className="flex items-center justify-between">
               <span>/robots.txt</span>
-              <span className="text-slate-400">Checked</span>
+              <span className="text-cyan-400">Audited</span>
             </div>
           </div>
         </div>
 
         {/* Security Headers Posture */}
-        <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-4 space-y-2 shadow-lg">
+        <div className="cyber-card rounded-xl p-4 space-y-2.5 shadow-xl">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-1.5 text-xs font-bold uppercase text-slate-300">
-              <ShieldAlert className="w-4 h-4 text-indigo-400" />
-              <span>HTTP Headers Audit</span>
+            <div className="flex items-center space-x-1.5 text-xs font-mono font-bold uppercase text-slate-300">
+              <ShieldAlert className="w-3.5 h-3.5 text-indigo-400" />
+              <span>HTTP Defense Headers</span>
             </div>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-700 font-bold">
-              AUDITED
+            <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-indigo-950/80 text-indigo-300 border border-indigo-500/40 font-bold">
+              ARMED
             </span>
           </div>
           <div className="text-xs text-slate-300 space-y-1 font-mono">
@@ -520,13 +532,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Top Security Alert Banner (if threats present) */}
       {topThreat && (
-        <div className="bg-rose-950/20 border border-rose-500/40 rounded-xl p-5 space-y-3 shadow-lg">
+        <div className="bg-rose-950/20 border border-rose-500/40 rounded-xl p-5 space-y-3 shadow-xl">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center space-x-2">
-              <span className="px-2 py-0.5 rounded text-[11px] font-extrabold font-mono uppercase bg-rose-500/20 text-rose-400 border border-rose-500/40">
+              <span className="px-2 py-0.5 rounded text-[11px] font-extrabold font-mono uppercase bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse">
                 {topThreat.severity} ALERT
               </span>
-              <span className="text-sm font-bold text-slate-200">{topThreat.threatName}</span>
+              <span className="text-sm font-bold font-mono text-slate-100">{topThreat.threatName}</span>
             </div>
             <div className="text-xs font-mono text-slate-400">
               Confidence: <span className="text-rose-400 font-bold">{topThreat.confidence}%</span> | Detected:{' '}
@@ -535,30 +547,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs pt-1">
-            <div className="space-y-1 bg-black/30 p-3 rounded-lg border border-rose-900/30">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                WHAT HAPPENED?
+            <div className="space-y-1 bg-black/40 p-3 rounded-lg border border-rose-900/40 font-mono">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400">
+                ATTACK VECTOR / PAYLOAD
               </span>
-              <p className="text-slate-300 leading-relaxed">{topThreat.whatHappened}</p>
+              <p className="text-slate-300 leading-relaxed font-sans">{topThreat.whatHappened}</p>
             </div>
-            <div className="space-y-1 bg-black/30 p-3 rounded-lg border border-rose-900/30">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                WHY WAS IT FLAGGED?
+            <div className="space-y-1 bg-black/40 p-3 rounded-lg border border-rose-900/40 font-mono">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
+                THREAT SIGNATURE
               </span>
-              <p className="text-slate-300 leading-relaxed">{topThreat.whyFlagged}</p>
+              <p className="text-slate-300 leading-relaxed font-sans">{topThreat.whyFlagged}</p>
             </div>
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-rose-500/20 text-xs">
             <span className="text-slate-400 font-mono truncate">
-              Affected endpoint: <span className="text-rose-300 font-semibold">{topThreat.affectedEndpoint}</span>
+              Target endpoint: <span className="text-rose-300 font-semibold">{topThreat.affectedEndpoint}</span>
             </span>
             <button
               type="button"
-              onClick={() => onNavigate('remediation')}
-              className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold flex items-center space-x-1.5 transition shrink-0"
+              onClick={() => onNavigate('analyst')}
+              className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-mono font-bold flex items-center space-x-1.5 transition shrink-0 active:scale-95 shadow-lg shadow-rose-950"
             >
-              <span>View Remediation Patch</span>
+              <span>⚡ Generate AI Patch & Fix</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -568,44 +580,47 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Two Column Section: Live Telemetry Feed (left) & Real Server Log Ingestion (right) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Events Feed */}
-        <div className="lg:col-span-2 bg-[#0f172a] border border-slate-800 rounded-xl p-5 space-y-4 shadow-lg">
+        <div className="lg:col-span-2 cyber-card rounded-xl p-5 space-y-4 shadow-2xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
               <Terminal className="w-4 h-4 text-cyan-400" />
-              <h2 className="text-sm font-bold text-slate-100">Live Telemetry & Probe Log Stream</h2>
+              <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-100">
+                02 // LIVE PACKET WIRE & INGESTION STREAM
+              </h2>
             </div>
             <button
               type="button"
               onClick={() => onNavigate('logs')}
-              className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center space-x-1 font-semibold"
+              className="text-xs font-mono text-cyan-400 hover:text-cyan-300 flex items-center space-x-1 font-semibold"
             >
-              <span>View All Logs ({logs.length})</span>
+              <span>Full Stream ({logs.length})</span>
               <ArrowRight className="w-3 h-3" />
             </button>
           </div>
 
           {logs.length === 0 ? (
-            <div className="text-center py-10 space-y-3">
-              <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 mx-auto flex items-center justify-center text-slate-400">
-                <Terminal className="w-5 h-5" />
+            <div className="text-center py-12 space-y-3">
+              <div className="w-10 h-10 rounded-full bg-slate-900 border border-white/[0.08] mx-auto flex items-center justify-center text-slate-400">
+                <Terminal className="w-5 h-5 text-cyan-400" />
               </div>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                No events currently in the buffer for {target.hostname}. Ready to receive live traffic or server logs.
+              <p className="text-xs font-mono text-slate-400 max-w-sm mx-auto">
+                Surveillance pipeline armed. Listening for real visitor packets from {target.hostname}...
               </p>
               <div className="flex items-center justify-center gap-2 pt-2">
                 <button
                   type="button"
                   onClick={handleSendRealPing}
-                  className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition"
+                  className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-mono font-bold text-xs transition active:scale-95"
                 >
-                  Send Live Test Request
+                  Send Verified Hit
                 </button>
                 <button
                   type="button"
                   onClick={handleLoadSampleRealLog}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold text-xs transition"
+                  className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/[0.08] font-mono font-bold text-xs transition"
                 >
-                  Load Real Server Log
+                  Load Server Log
                 </button>
               </div>
             </div>
@@ -614,29 +629,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               {logs.slice(0, 10).map((log) => (
                 <div
                   key={log.id}
-                  className="flex items-center justify-between p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition"
+                  className="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/70 border border-white/[0.06] hover:border-cyan-500/40 transition"
                 >
-                  <div className="flex items-center space-x-3 truncate">
-                    <span className="text-slate-500 text-[11px] shrink-0">{log.displayTime}</span>
+                  <div className="flex items-center space-x-2.5 truncate">
+                    <span className="text-slate-500 text-[10px] shrink-0">{log.displayTime}</span>
                     <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase shrink-0 ${
+                      className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase shrink-0 ${
                         log.method === 'GET'
-                          ? 'bg-cyan-950 text-cyan-400 border border-cyan-800'
+                          ? 'bg-cyan-950 text-cyan-300 border border-cyan-800'
                           : log.method === 'POST'
-                          ? 'bg-indigo-950 text-indigo-400 border border-indigo-800'
+                          ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                          : log.method === 'DELETE'
+                          ? 'bg-rose-950 text-rose-300 border border-rose-800'
                           : 'bg-slate-800 text-slate-300'
                       }`}
                     >
                       {log.method}
                     </span>
-                    <span className="text-slate-200 truncate">{log.endpoint}</span>
-                    <span className="text-cyan-400 font-mono text-[10px] hidden sm:inline-block bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
+                    <span className="text-slate-200 truncate font-mono text-xs">{log.endpoint}</span>
+                    <span className="text-cyan-400 font-mono text-[10px] hidden sm:inline-block bg-black/60 px-1.5 py-0.5 rounded border border-white/[0.06]">
                       {log.sourceIp}
                     </span>
                   </div>
-                  <div className="flex items-center space-x-3 shrink-0 ml-2">
+                  <div className="flex items-center space-x-2.5 shrink-0 ml-2">
                     <span
-                      className={`text-xs font-bold ${
+                      className={`text-xs font-bold font-mono ${
                         log.status >= 500
                           ? 'text-rose-400'
                           : log.status === 401 || log.status === 403
@@ -649,12 +666,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       {log.status}
                     </span>
                     <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                      className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase font-mono ${
                         log.severity === 'CRITICAL'
                           ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
                           : log.severity === 'SUSPICIOUS'
                           ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                          : 'bg-slate-800 text-slate-400'
+                          : 'bg-slate-800/80 text-slate-400 border border-slate-700/50'
                       }`}
                     >
                       {log.severity}
@@ -667,14 +684,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Real Server Log File Ingestion & Real Ingestion Tools */}
-        <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-5 space-y-4 shadow-lg">
+        <div className="cyber-card rounded-xl p-5 space-y-4 shadow-2xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <Upload className="w-4 h-4 text-cyan-400" />
-              <h2 className="text-sm font-bold text-slate-100">Ingest Real Server Logs</h2>
+              <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-100">
+                03 // OFFLINE LOG INGEST
+              </h2>
             </div>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded font-bold bg-cyan-950 text-cyan-400 border border-cyan-800">
-              LOG PARSER
+            <span className="text-[9px] font-mono px-2 py-0.5 rounded font-bold bg-cyan-950 text-cyan-400 border border-cyan-800">
+              PARSER
             </span>
           </div>
 

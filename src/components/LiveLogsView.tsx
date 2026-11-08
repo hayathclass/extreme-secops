@@ -24,6 +24,8 @@ import {
   Users,
   Smartphone,
   Laptop,
+  Tablet,
+  Monitor,
   MapPin,
   ExternalLink,
   Sparkles,
@@ -454,11 +456,15 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
                 <div className="grid grid-cols-2 gap-2 text-xs font-mono">
                   <div className="bg-slate-950/60 p-2 rounded border border-slate-800/80">
                     <span className="text-[10px] text-slate-500 block">Device</span>
-                    <span className="text-slate-200 font-bold flex items-center gap-1 truncate" title={person.device}>
-                      {person.device.includes('iPhone') || person.device.includes('Android') || person.device.includes('Mobile') ? (
-                        <Smartphone className="w-3 h-3 text-cyan-400 shrink-0" />
+                    <span className="text-slate-200 font-bold flex items-center gap-1.5 truncate" title={person.device}>
+                      {person.device.includes('iPad') || person.device.includes('Tablet') || person.device.includes('Tab') ? (
+                        <Tablet className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                      ) : person.device.includes('iPhone') || person.device.includes('Android') || person.device.includes('Mobile') || person.device.includes('Pixel') || person.device.includes('Galaxy') ? (
+                        <Smartphone className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                      ) : person.device.includes('Laptop') || person.device.includes('MacBook') ? (
+                        <Laptop className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                       ) : (
-                        <Laptop className="w-3 h-3 text-cyan-400 shrink-0" />
+                        <Monitor className="w-3.5 h-3.5 text-slate-300 shrink-0" />
                       )}
                       <span className="truncate">{person.device}</span>
                     </span>

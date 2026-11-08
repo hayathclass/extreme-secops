@@ -12,7 +12,10 @@ export type EventType =
   | 'INJECTION_ATTEMPT'
   | 'RATE_SPIKE'
   | 'CONFIG_ACCESS'
-  | 'ADMIN_ACCESS';
+  | 'ADMIN_ACCESS'
+  | 'HEARTBEAT'
+  | 'USER_INTERACTION'
+  | 'SESSION_END';
 
 export type LogSource = 'REAL_LIVE_INGEST' | 'REAL_SERVER_PROBE' | 'REAL_LOG_FILE' | 'SIMULATION';
 
@@ -145,6 +148,8 @@ export interface VisitorPerson {
   lastStatus: number;
   userAgent: string;
   isSimulated?: boolean;
+  isOnline?: boolean;
+  leftAt?: string;
 }
 
 export interface ThreatDetection {

@@ -216,6 +216,9 @@ class SecurityStore {
       if (!this.isAutoStreamActive) return;
       this.streamTick++;
 
+      // Pulse UI updates periodically so active/left timeouts update dynamically in real time
+      this.notify();
+
       // Fetch remote collector events for active target
       const activeId = this.activeTargetId || (this.targets[0] ? this.targets[0].id : null);
       if (activeId) {
@@ -278,14 +281,26 @@ class SecurityStore {
     const list = (this.logs.get(targetId) || []).filter(
       (l) => l.logSource === 'REAL_LIVE_INGEST'
     );
+    const now = Date.now();
+    const ONLINE_TIMEOUT_MS = 25000;
     const map = new Map<string, VisitorPerson>();
 
-    list.forEach((event) => {
+    // Inspect from newest to oldest
+    const sorted = [...list].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+
+    sorted.forEach((event) => {
       const ip = (event.sourceIp || '127.0.0.1').trim();
       const existing = map.get(ip);
+      const eventTime = new Date(event.timestamp).getTime();
       const isSim = event.flagReason?.includes('Simulated') || event.payloadSnippet?.includes('simulator');
 
       if (!existing) {
+        const isExit = event.eventType === 'SESSION_END';
+        const isFresh = (now - eventTime) < ONLINE_TIMEOUT_MS;
+        const isOnline = !isExit && isFresh;
+
         map.set(ip, {
           ip,
           device: event.clientGeo?.device || (event.userAgent.includes('Mobile') ? 'Mobile Device' : 'Desktop'),
@@ -298,23 +313,39 @@ class SecurityStore {
           lastStatus: event.status,
           userAgent: event.userAgent,
           isSimulated: isSim,
+          isOnline,
+          leftAt: isExit ? event.timestamp : (!isFresh ? event.timestamp : undefined),
         });
       } else {
         existing.totalHits += 1;
-        if (new Date(event.timestamp) > new Date(existing.lastSeen)) {
-          existing.lastSeen = event.timestamp;
-          existing.lastEndpoint = `${event.method} ${event.endpoint}`;
-          existing.lastStatus = event.status;
-          if (event.clientGeo?.device && !existing.device) {
-            existing.device = event.clientGeo.device;
-          }
+        if (new Date(event.timestamp) < new Date(existing.firstSeen)) {
+          existing.firstSeen = event.timestamp;
         }
       }
     });
 
-    return Array.from(map.values()).sort(
-      (a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime()
-    );
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.isOnline && !b.isOnline) return -1;
+      if (!a.isOnline && b.isOnline) return 1;
+      return new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime();
+    });
+  }
+
+  public getActiveVisitorsCount(targetId: string): number {
+    return this.getVisitorPersons(targetId).filter((p) => p.isOnline).length;
+  }
+
+  public async sendVisitorExitSimulation(targetId: string, ip?: string): Promise<LogEvent> {
+    const list = this.getVisitorPersons(targetId);
+    const targetIp = ip || (list.find((p) => p.isOnline)?.ip) || (list[0]?.ip) || '49.37.150.88';
+    return await this.sendRealIngestEvent(targetId, {
+      method: 'POST',
+      endpoint: '/session/leave',
+      status: 200,
+      eventType: 'SESSION_END',
+      sourceIp: targetIp,
+      flagReason: `Visitor from ${targetIp} closed tab / left website (Simulated Exit)`,
+    });
   }
 
   public async sendSecondDeviceSimulation(targetId: string, deviceType: 'mobile' | 'tablet' | 'remote_desktop' = 'mobile'): Promise<LogEvent> {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LogEvent, Target, VisitorPerson } from '../types/security';
 import { securityStore } from '../services/securityStore';
 import {
@@ -177,10 +177,18 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
   const probeCount = logs.filter((l) => l.logSource === 'REAL_SERVER_PROBE').length;
   const simCount = logs.filter((l) => l.logSource === 'SIMULATION').length;
 
+  // Local 1-second pulse so online/offline timeouts and relative timestamps update dynamically
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick((v) => v + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Unique visitor persons based on distinct client IPs and device metadata
   const visitorPersons = target ? securityStore.getVisitorPersons(target.id) : [];
+  const activeVisitors = visitorPersons.filter((p) => p.isOnline);
   const hostOrigin = typeof window !== 'undefined' ? window.location.origin : '';
-  const mobileTestUrl = `${hostOrigin}/api/collector/test-visit?targetId=${target?.id || 'target-real-site'}`;
+  const mobileTestUrl = `${hostOrigin}/api/collector/test-visit?targetId=${target?.id || 'target-atc-simulator'}`;
 
   const handleSimulateSecondDevice = async () => {
     if (!target) return;
@@ -190,6 +198,11 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
     } finally {
       setIsSimulatingSecondDevice(false);
     }
+  };
+
+  const handleSimulateLeave = async (ip?: string) => {
+    if (!target) return;
+    await securityStore.sendVisitorExitSimulation(target.id, ip);
   };
 
   const copyIpAddress = (ip: string) => {
@@ -344,10 +357,17 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
                 <h3 className="text-base font-bold text-slate-100 font-mono">
                   Active Real-Time Visitors
                 </h3>
-                <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 shadow-sm">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>{visitorPersons.length} {visitorPersons.length === 1 ? 'Person' : 'Persons'} Connected</span>
-                </span>
+                {activeVisitors.length > 0 ? (
+                  <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 shadow-sm">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>{activeVisitors.length} {activeVisitors.length === 1 ? 'Person' : 'Persons'} Online Now</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                    <span className="w-2 h-2 rounded-full bg-slate-500" />
+                    <span>0 Online ({visitorPersons.length} Total Seen)</span>
+                  </span>
+                )}
               </div>
             </div>
             <p className="text-xs text-slate-400">
@@ -378,6 +398,18 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
               <Smartphone className={`w-3.5 h-3.5 ${isSimulatingSecondDevice ? 'animate-spin' : ''}`} />
               <span>{isSimulatingSecondDevice ? 'Connecting 2nd Device...' : '+ Add 2nd Device (Mobile IP)'}</span>
             </button>
+
+            {activeVisitors.length > 0 && (
+              <button
+                type="button"
+                onClick={() => handleSimulateLeave()}
+                className="px-3 py-1.5 rounded-lg bg-rose-950/50 hover:bg-rose-900/70 text-rose-300 border border-rose-500/40 text-xs font-bold flex items-center space-x-1.5 transition active:scale-95 shadow-sm"
+                title="Simulate active visitor closing tab / leaving website"
+              >
+                <X className="w-3.5 h-3.5 text-rose-400" />
+                <span>Simulate Device Leave</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -427,7 +459,9 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
             {visitorPersons.map((person, idx) => (
               <div
                 key={person.ip}
-                className="bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-xl p-3.5 space-y-2.5 transition shadow-md relative overflow-hidden"
+                className={`bg-slate-900/90 border rounded-xl p-3.5 space-y-2.5 transition shadow-md relative overflow-hidden ${
+                  person.isOnline ? 'border-slate-800 hover:border-emerald-500/50 shadow-emerald-950/20' : 'border-slate-800/60 opacity-80 hover:opacity-100'
+                }`}
               >
                 {/* Person Header */}
                 <div className="flex items-center justify-between">
@@ -444,10 +478,27 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center space-x-1 text-[11px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>Online</span>
-                  </div>
+                  {person.isOnline ? (
+                    <div className="flex items-center space-x-1.5">
+                      <div className="flex items-center space-x-1 text-[11px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>Online</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleSimulateLeave(person.ip)}
+                        className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/40 transition"
+                        title="Simulate this person closing tab"
+                      >
+                        Leave
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-1 text-[11px] font-mono text-slate-400 bg-slate-800/90 px-2 py-0.5 rounded border border-slate-700">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-400/80" />
+                      <span>Left Website</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* IP Address & Copy */}
@@ -496,8 +547,10 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
 
                 {/* Activity & Hits */}
                 <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-1 border-t border-slate-800/60">
-                  <span className="text-emerald-400 font-semibold">{person.totalHits} Total Hits</span>
-                  <span className="text-slate-500 truncate max-w-[160px]" title={person.lastEndpoint}>
+                  <span className={person.isOnline ? "text-emerald-400 font-semibold" : "text-slate-400 font-semibold"}>
+                    {person.isOnline ? `${person.totalHits} Total Hits (Active)` : `${person.totalHits} Hits (Left ${new Date(person.leftAt || person.lastSeen).toLocaleTimeString()})`}
+                  </span>
+                  <span className="text-slate-500 truncate max-w-[150px]" title={person.lastEndpoint}>
                     {person.lastEndpoint}
                   </span>
                 </div>

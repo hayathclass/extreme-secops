@@ -576,6 +576,89 @@ async function createServer() {
       });
     } catch(ign) {}
   }, true);
+
+  // 6. Live Presence Heartbeat (pulsed every 10s while tab is open)
+  var heartbeatTimer = setInterval(function() {
+    if (!document.hidden) {
+      transmit({
+        method: 'GET',
+        endpoint: window.location.pathname || '/',
+        status: 200,
+        eventType: 'HEARTBEAT',
+        severity: 'NORMAL',
+        latencyMs: 10,
+        flagReason: 'Live visitor presence heartbeat'
+      });
+    }
+  }, 10000);
+
+  // 7. Instant Leave Detection: when user closes tab, navigates away, or leaves website
+  var leaveReported = false;
+  function reportExit() {
+    if (leaveReported) return;
+    leaveReported = true;
+    try { clearInterval(heartbeatTimer); } catch(e) {}
+
+    var exitPayload = JSON.stringify({
+      targetId: targetId,
+      apiKey: apiKey,
+      timestamp: new Date().toISOString(),
+      url: window.location.href,
+      path: window.location.pathname || '/',
+      userAgent: navigator.userAgent,
+      clientPublicIp: cachedClientIp || undefined,
+      method: 'POST',
+      endpoint: '/session/leave',
+      status: 200,
+      eventType: 'SESSION_END',
+      severity: 'NORMAL',
+      flagReason: 'Visitor left website / closed tab'
+    });
+
+    var beaconSent = false;
+    try {
+      if (navigator.sendBeacon) {
+        var blob = new Blob([exitPayload], { type: 'text/plain' });
+        beaconSent = navigator.sendBeacon(ingestUrl, blob);
+      }
+    } catch(e) {}
+
+    if (!beaconSent && window.fetch) {
+      try {
+        fetch(ingestUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: exitPayload,
+          keepalive: true
+        });
+      } catch(e) {}
+    }
+  }
+
+  window.addEventListener('pagehide', reportExit);
+  window.addEventListener('beforeunload', reportExit);
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'hidden') {
+      reportExit();
+    } else if (document.visibilityState === 'visible' && leaveReported) {
+      leaveReported = false;
+      heartbeatTimer = setInterval(function() {
+        if (!document.hidden) {
+          transmit({
+            method: 'GET',
+            endpoint: window.location.pathname || '/',
+            status: 200,
+            eventType: 'HEARTBEAT',
+            severity: 'NORMAL',
+            latencyMs: 10,
+            flagReason: 'Live visitor presence heartbeat'
+          });
+        }
+      }, 10000);
+      sendInitialPageview();
+    }
+  });
 })();`;
 
     res.send(script);
@@ -1415,11 +1498,25 @@ async function createServer() {
       list = list.filter((e) => e.targetId === targetId || e.targetId === 'target-atc-simulator' || e.targetId === 'target-real-site' || e.targetId === 'target-prod-site');
     }
 
+    const now = Date.now();
+    const ONLINE_TIMEOUT_MS = 25000;
     const visitorMap = new Map<string, any>();
-    list.forEach((event) => {
-      const ip = event.sourceIp || '127.0.0.1';
+
+    // Sort newest to oldest so latest session state (leave or pageview) takes precedence
+    const sorted = [...list].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+
+    sorted.forEach((event) => {
+      const ip = (event.sourceIp || '127.0.0.1').trim();
       const existing = visitorMap.get(ip);
+      const eventTime = new Date(event.timestamp).getTime();
+
       if (!existing) {
+        const isExit = event.eventType === 'SESSION_END';
+        const isFresh = (now - eventTime) < ONLINE_TIMEOUT_MS;
+        const isOnline = !isExit && isFresh;
+
         visitorMap.set(ip, {
           ip,
           device: event.clientGeo?.device || 'Desktop',
@@ -1430,26 +1527,28 @@ async function createServer() {
           lastEndpoint: `${event.method} ${event.endpoint}`,
           lastStatus: event.status,
           userAgent: event.userAgent,
+          isOnline,
+          leftAt: isExit ? event.timestamp : undefined,
         });
       } else {
         existing.totalHits += 1;
-        if (new Date(event.timestamp) > new Date(existing.lastSeen)) {
-          existing.lastSeen = event.timestamp;
-          existing.lastEndpoint = `${event.method} ${event.endpoint}`;
-          existing.lastStatus = event.status;
-          if (event.clientGeo?.device && event.clientGeo.device !== 'Desktop') {
-            existing.device = event.clientGeo.device;
-          }
+        if (new Date(event.timestamp) < new Date(existing.firstSeen)) {
+          existing.firstSeen = event.timestamp;
         }
       }
     });
 
-    const visitors = Array.from(visitorMap.values()).sort(
-      (a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime()
-    );
+    const visitors = Array.from(visitorMap.values()).sort((a, b) => {
+      if (a.isOnline && !b.isOnline) return -1;
+      if (!a.isOnline && b.isOnline) return 1;
+      return new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime();
+    });
+
+    const activeNowCount = visitors.filter((v) => v.isOnline).length;
 
     res.json({
       success: true,
+      activeNowCount,
       totalUniquePersons: visitors.length,
       visitors,
     });
@@ -1457,7 +1556,7 @@ async function createServer() {
 
   // Interactive Live Mobile Test Visit Page
   app.get('/api/collector/test-visit', (req, res) => {
-    const targetId = (req.query.targetId as string) || 'target-real-site';
+    const targetId = (req.query.targetId as string) || 'target-atc-simulator';
     const host = req.headers.host || `localhost:${PORT}`;
     const protocol = req.headers['x-forwarded-proto'] || 'http';
     const baseUrl = `${protocol}://${host}`;
@@ -1468,49 +1567,64 @@ async function createServer() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Live Visitor Device Verified</title>
+  <title>Live Visitor Device Verified — EXTREME SecOps</title>
   <style>
-    body { background: #090d16; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
-    .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 28px; max-width: 440px; width: 100%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
-    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: #064e3b; color: #34d399; font-size: 11px; font-weight: 700; border-radius: 9999px; font-family: monospace; }
+    body { background: #090d16; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
+    .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 24px; max-width: 440px; width: 100%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+    .badge-online { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: #064e3b; color: #34d399; font-size: 11px; font-weight: 700; border-radius: 9999px; font-family: monospace; border: 1px solid #059669; }
+    .badge-offline { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: #451a1a; color: #f87171; font-size: 11px; font-weight: 700; border-radius: 9999px; font-family: monospace; border: 1px solid #b91c1c; }
     .pulse { width: 8px; height: 8px; background: #10b981; border-radius: 50%; animation: pulse 1.5s infinite; }
     @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
-    h1 { font-size: 20px; font-weight: 800; margin: 16px 0 8px; color: #f8fafc; }
-    p { font-size: 13px; color: #94a3b8; line-height: 1.5; margin: 0 0 16px; }
-    .box { background: #020617; border: 1px solid #1e293b; border-radius: 10px; padding: 12px; margin-bottom: 16px; font-family: monospace; font-size: 12px; }
+    h1 { font-size: 19px; font-weight: 800; margin: 14px 0 6px; color: #f8fafc; }
+    p { font-size: 13px; color: #94a3b8; line-height: 1.5; margin: 0 0 14px; }
+    .box { background: #020617; border: 1px solid #1e293b; border-radius: 10px; padding: 12px; margin-bottom: 14px; font-family: monospace; font-size: 12px; }
     .box div { margin-bottom: 6px; display: flex; justify-content: space-between; }
     .box div:last-child { margin-bottom: 0; }
     .val { color: #38bdf8; font-weight: 700; word-break: break-all; }
-    .btn { display: block; width: 100%; padding: 12px; border-radius: 8px; border: none; font-weight: 700; font-size: 13px; cursor: pointer; transition: 0.2s; margin-bottom: 8px; }
+    .btn { display: block; width: 100%; padding: 11px; border-radius: 8px; border: none; font-weight: 700; font-size: 13px; cursor: pointer; transition: 0.15s; margin-bottom: 8px; text-align: center; }
+    .btn:active { transform: scale(0.98); }
     .btn-primary { background: #10b981; color: #022c22; }
-    .btn-primary:active { transform: scale(0.98); }
     .btn-secondary { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; }
-    .status-msg { font-size: 12px; color: #34d399; text-align: center; font-weight: 600; min-height: 20px; margin-top: 8px; }
+    .btn-leave { background: #e11d48; color: #ffffff; }
+    .status-msg { font-size: 12px; color: #34d399; text-align: center; font-weight: 600; min-height: 20px; margin-top: 6px; }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="badge"><div class="pulse"></div>REAL-TIME VISITOR CONNECTED</div>
-    <h1>Live Telemetry Verified</h1>
-    <p>Your device is now streaming live telemetry directly to the SecOps dashboard.</p>
+    <div id="statusBadge" class="badge-online"><div class="pulse"></div>REAL-TIME VISITOR CONNECTED</div>
+    <h1 id="titleHeader">Live Telemetry Active</h1>
+    <p id="descPara">Your device is streaming real telemetry to the SecOps dashboard. Heartbeat pulses every 10s.</p>
     <div class="box">
       <div><span>Device:</span><span class="val" id="devType">Detecting...</span></div>
       <div><span>Public IP:</span><span class="val" id="ipVal">Resolving...</span></div>
       <div><span>Target ID:</span><span class="val">${targetId}</span></div>
       <div><span>Hits Sent:</span><span class="val" id="hitCount">1</span></div>
+      <div><span>Status:</span><span class="val" id="onlineStatus" style="color:#34d399">ONLINE</span></div>
     </div>
-    <button class="btn btn-primary" onclick="sendHit('/products', 200, 'PAGEVIEW')">Navigate /products (200 OK)</button>
-    <button class="btn btn-secondary" onclick="sendHit('/api/user/checkout', 200, 'API_REQUEST')">POST /api/user/checkout</button>
-    <button class="btn btn-secondary" onclick="sendHit('/admin/login', 401, 'AUTHENTICATION', 'Failed credentials from remote mobile device')">Trigger 401 Auth Flag</button>
+
+    <div id="activeControls">
+      <button class="btn btn-primary" onclick="sendHit('/products', 200, 'PAGEVIEW')">Navigate /products (200 OK)</button>
+      <button class="btn btn-secondary" onclick="sendHit('/api/user/checkout', 200, 'API_REQUEST')">POST /api/user/checkout</button>
+      <button class="btn btn-secondary" onclick="sendHit('/admin/login', 401, 'AUTHENTICATION', 'Failed credentials from remote mobile device')">Trigger 401 Auth Flag</button>
+      <button class="btn btn-leave" onclick="manualLeave()">🚪 Leave Website (Close Session)</button>
+    </div>
+
+    <div id="reconnectControls" style="display:none;">
+      <button class="btn btn-primary" onclick="reconnect()">🔄 Re-enter Website (Go Back Online)</button>
+    </div>
+
     <div class="status-msg" id="statusMsg">Event registered in dashboard</div>
   </div>
+
   <script>
-    var hits = 1;
+    var hits = 0;
     var publicIp = '';
+    var isConnected = true;
     var dev = /iPhone/i.test(navigator.userAgent) ? 'iPhone (iOS)' : /Android/i.test(navigator.userAgent) ? 'Android Mobile' : /iPad/i.test(navigator.userAgent) ? 'iPad (iPadOS)' : /Mac/i.test(navigator.userAgent) ? 'Mac (macOS)' : 'Desktop';
     document.getElementById('devType').textContent = dev;
 
     function sendHit(endpoint, status, eventType, flagReason) {
+      if (!isConnected && eventType !== 'PAGEVIEW') return;
       hits++;
       document.getElementById('hitCount').textContent = hits;
       fetch('${baseUrl}/api/collector/ingest', {
@@ -1527,10 +1641,100 @@ async function createServer() {
           flagReason: flagReason || ('Real mobile user navigated ' + endpoint)
         })
       }).then(function() {
-        document.getElementById('statusMsg').textContent = '✓ Live Event Streamed (' + endpoint + ')';
-        setTimeout(function() { document.getElementById('statusMsg').textContent = ''; }, 2000);
+        document.getElementById('statusMsg').textContent = '✓ Live Event: ' + (eventType || 'PAGEVIEW') + ' (' + endpoint + ')';
+        setTimeout(function() { document.getElementById('statusMsg').textContent = ''; }, 2500);
       });
     }
+
+    // 10-Second Heartbeat while connected
+    var heartbeatTimer = setInterval(function() {
+      if (isConnected && !document.hidden) {
+        sendHit(window.location.pathname, 200, 'HEARTBEAT', 'Mobile visitor presence heartbeat');
+      }
+    }, 10000);
+
+    // Leave Website / Exit Detection
+    function triggerLeave() {
+      if (!isConnected) return;
+      isConnected = false;
+      try { clearInterval(heartbeatTimer); } catch(e) {}
+
+      var exitPayload = JSON.stringify({
+        targetId: '${targetId}',
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        path: window.location.pathname || '/',
+        userAgent: navigator.userAgent,
+        clientPublicIp: publicIp || undefined,
+        method: 'POST',
+        endpoint: '/session/leave',
+        status: 200,
+        eventType: 'SESSION_END',
+        severity: 'NORMAL',
+        flagReason: 'Visitor left website / closed tab'
+      });
+
+      var beaconSent = false;
+      try {
+        if (navigator.sendBeacon) {
+          var blob = new Blob([exitPayload], { type: 'text/plain' });
+          beaconSent = navigator.sendBeacon('${baseUrl}/api/collector/ingest', blob);
+        }
+      } catch(e) {}
+
+      if (!beaconSent && window.fetch) {
+        try {
+          fetch('${baseUrl}/api/collector/ingest', {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: exitPayload,
+            keepalive: true
+          });
+        } catch(e) {}
+      }
+    }
+
+    function manualLeave() {
+      triggerLeave();
+      document.getElementById('statusBadge').className = 'badge-offline';
+      document.getElementById('statusBadge').innerHTML = '● VISITOR DISCONNECTED / LEFT';
+      document.getElementById('titleHeader').textContent = 'Session Closed (Left Website)';
+      document.getElementById('descPara').textContent = 'You left the website. Check your SecOps dashboard now: active visitor count immediately updated to 0!';
+      document.getElementById('onlineStatus').textContent = 'OFFLINE (LEFT)';
+      document.getElementById('onlineStatus').style.color = '#f87171';
+      document.getElementById('activeControls').style.display = 'none';
+      document.getElementById('reconnectControls').style.display = 'block';
+      document.getElementById('statusMsg').textContent = '✓ Sent SESSION_END beacon to dashboard';
+    }
+
+    function reconnect() {
+      isConnected = true;
+      document.getElementById('statusBadge').className = 'badge-online';
+      document.getElementById('statusBadge').innerHTML = '<div class="pulse"></div>REAL-TIME VISITOR CONNECTED';
+      document.getElementById('titleHeader').textContent = 'Live Telemetry Active';
+      document.getElementById('descPara').textContent = 'Your device is streaming real telemetry to the SecOps dashboard.';
+      document.getElementById('onlineStatus').textContent = 'ONLINE';
+      document.getElementById('onlineStatus').style.color = '#34d399';
+      document.getElementById('activeControls').style.display = 'block';
+      document.getElementById('reconnectControls').style.display = 'none';
+      sendHit(window.location.pathname, 200, 'PAGEVIEW', 'Rejoined website session');
+      heartbeatTimer = setInterval(function() {
+        if (isConnected && !document.hidden) {
+          sendHit(window.location.pathname, 200, 'HEARTBEAT', 'Mobile visitor presence heartbeat');
+        }
+      }, 10000);
+    }
+
+    window.addEventListener('pagehide', triggerLeave);
+    window.addEventListener('beforeunload', triggerLeave);
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'hidden') {
+        triggerLeave();
+      } else if (document.visibilityState === 'visible' && !isConnected) {
+        reconnect();
+      }
+    });
 
     fetch('https://api.ipify.org?format=json')
       .then(function(r) { return r.json(); })

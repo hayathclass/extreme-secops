@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Target, LogEvent, ThreatDetection, Incident } from '../types/security';
 import { securityStore } from '../services/securityStore';
 import {
@@ -59,10 +59,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [isParsingLogs, setIsParsingLogs] = useState(false);
   const [logParseMessage, setLogParseMessage] = useState<string | null>(null);
   const [copiedSnippet, setCopiedSnippet] = useState(false);
+  const [, setTick] = useState(0);
+
+  // Re-evaluate active visitor presence every second so timeouts/leaves update in real time
+  useEffect(() => {
+    const timer = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const topThreat = threats[0];
   const activeIncidents = incidents.filter((i) => i.status !== 'RESOLVED');
   const visitorPersons = securityStore.getVisitorPersons(target.id);
+  const activeVisitors = visitorPersons.filter((p) => p.isOnline);
 
   const handleRunDeepScan = async () => {
     setIsDeepScanning(true);
@@ -310,16 +318,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         >
           <div className="flex items-center justify-between text-slate-400">
             <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className={`w-2 h-2 rounded-full ${activeVisitors.length > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
               Active Persons
             </span>
             <Users className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="text-2xl sm:text-3xl font-extrabold font-mono text-emerald-300">
-            {visitorPersons.length}
+            {activeVisitors.length}
           </div>
           <p className="text-[11px] text-slate-400 flex items-center justify-between">
-            <span>{visitorPersons.length === 1 ? '1 unique device' : `${visitorPersons.length} unique devices`}</span>
+            <span>{activeVisitors.length} online • {visitorPersons.length} total seen</span>
             <span className="text-emerald-400 group-hover:underline text-[10px]">View Logs →</span>
           </p>
         </div>
@@ -376,7 +384,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* Live Active Visitor Strip when people are connected */}
-      {visitorPersons.length > 0 && (
+      {activeVisitors.length > 0 ? (
         <div className="bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/30 rounded-xl p-4 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 rounded-lg bg-emerald-950 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
@@ -385,18 +393,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <span className="text-xs font-bold text-slate-200">
-                  {visitorPersons.length} Real Person{visitorPersons.length === 1 ? '' : 's'} Currently Active on {target.hostname}
+                  {activeVisitors.length} Real Person{activeVisitors.length === 1 ? '' : 's'} Currently Active on {target.hostname}
                 </span>
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               </div>
               <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-400 mt-0.5">
-                {visitorPersons.slice(0, 3).map((p, i) => (
+                {activeVisitors.slice(0, 3).map((p, i) => (
                   <span key={p.ip} className="bg-black/50 px-2 py-0.5 rounded text-cyan-300 border border-slate-800">
                     Person {i + 1}: {p.ip} ({p.device})
                   </span>
                 ))}
-                {visitorPersons.length > 3 && (
-                  <span className="text-slate-500">+{visitorPersons.length - 3} more</span>
+                {activeVisitors.length > 3 && (
+                  <span className="text-slate-500">+{activeVisitors.length - 3} more</span>
                 )}
               </div>
             </div>
@@ -410,7 +418,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
-      )}
+      ) : visitorPersons.length > 0 ? (
+        <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3 px-4 shadow flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-400">
+          <div className="flex items-center space-x-2">
+            <span className="w-2 h-2 rounded-full bg-slate-500" />
+            <span>0 active visitors connected right now • {visitorPersons.length} previous visitors recorded</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => onNavigate('logs')}
+            className="text-cyan-400 hover:text-cyan-300 font-mono text-xs flex items-center gap-1 self-start sm:self-auto"
+          >
+            <span>View Visitor Activity</span>
+            <ArrowRight className="w-3 h-3" />
+          </button>
+        </div>
+      ) : null}
 
       {/* Real Security Posture Breakdown (SSL, DNS, Headers, Sensitive Files) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

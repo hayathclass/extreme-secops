@@ -29,6 +29,7 @@ export interface RealEvent {
     country?: string;
     city?: string;
     device?: string;
+    visitorId?: string;
   };
   headers?: Record<string, string>;
   probeDetails?: {
@@ -583,6 +584,16 @@ async function createServer() {
   }
 
   var clientDeviceCached = detectClientDevice();
+  var visitorDeviceId = '';
+  try {
+    visitorDeviceId = localStorage.getItem('ext_sec_device_id') || '';
+    if (!visitorDeviceId) {
+      visitorDeviceId = 'dev-' + Math.random().toString(36).substring(2, 9);
+      localStorage.setItem('ext_sec_device_id', visitorDeviceId);
+    }
+  } catch(e) {
+    visitorDeviceId = 'dev-' + Math.random().toString(36).substring(2, 9);
+  }
 
   function transmit(data) {
     // If user has exited/closed tab, do not transmit trailing background fetches or stream packets
@@ -599,6 +610,7 @@ async function createServer() {
         referrer: document.referrer || '',
         userAgent: navigator.userAgent,
         clientDevice: clientDeviceCached,
+        visitorId: visitorDeviceId,
         clientPublicIp: cachedClientIp || undefined
       }, data);
 
@@ -1682,6 +1694,7 @@ async function createServer() {
       flagReason: body.flagReason || (severity === 'SUSPICIOUS' ? `Real HTTP event flagged: ${method} ${endpoint} returned ${status}` : `Real user request from ${determinedIp}`),
       clientGeo: {
         device: deviceType,
+        visitorId: (body.visitorId as string) || undefined,
         country: (req.headers['cf-ipcountry'] as string) || (body.country as string) || undefined,
       },
       headers: body.headers || {
@@ -1741,23 +1754,29 @@ async function createServer() {
     const ONLINE_TIMEOUT_MS = 25000;
     const visitorMap = new Map<string, any>();
 
-    // Group events by client IP
-    const eventsByIp = new Map<string, RealEvent[]>();
+    // Group events by distinct client device
+    // Ensures multiple devices on the same WiFi router (which share one public IP)
+    // each get their own separate active visitor card!
+    const eventsByDevice = new Map<string, RealEvent[]>();
     list.forEach((event) => {
       const ip = (event.sourceIp || '127.0.0.1').trim();
-      const group = eventsByIp.get(ip) || [];
+      const dev = (event.clientGeo?.device || parseDeviceDetails(event.userAgent) || 'Device').trim();
+      const vid = event.clientGeo?.visitorId || '';
+      const deviceKey = vid ? `${ip}::${vid}` : `${ip}::${dev}`;
+      const group = eventsByDevice.get(deviceKey) || [];
       group.push(event);
-      eventsByIp.set(ip, group);
+      eventsByDevice.set(deviceKey, group);
     });
 
-    eventsByIp.forEach((events, ip) => {
-      // Sort newest to oldest for this IP
+    eventsByDevice.forEach((events, deviceKey) => {
+      // Sort newest to oldest for this device
       events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
       const latestEvent = events[0];
       const oldestEvent = events[events.length - 1];
+      const ip = (latestEvent.sourceIp || '127.0.0.1').trim();
 
-      // Find the most recent SESSION_END event for this IP
+      // Find the most recent SESSION_END event for this device
       const sessionEndEvent = events.find((e) => e.eventType === 'SESSION_END');
 
       // Find the most recent active user interaction (pageview, heartbeat, click, interaction)
@@ -1789,7 +1808,8 @@ async function createServer() {
         leftAt = sessionEndEvent?.timestamp || (latestActiveEvent ? latestActiveEvent.timestamp : latestEvent.timestamp);
       }
 
-      visitorMap.set(ip, {
+      visitorMap.set(deviceKey, {
+        id: deviceKey,
         ip,
         device: latestEvent.clientGeo?.device || parseDeviceDetails(latestEvent.userAgent),
         country: latestEvent.clientGeo?.country,

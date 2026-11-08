@@ -402,7 +402,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
               <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-400 mt-0.5">
                 {activeVisitors.slice(0, 3).map((p, i) => (
-                  <span key={p.ip} className="bg-black/50 px-2 py-0.5 rounded text-cyan-300 border border-slate-800">
+                  <span key={p.id || `${p.ip}-${p.device}-${i}`} className="bg-black/50 px-2 py-0.5 rounded text-cyan-300 border border-slate-800">
                     Person {i + 1}: {p.ip} ({p.device})
                   </span>
                 ))}

@@ -285,24 +285,30 @@ class SecurityStore {
     const ONLINE_TIMEOUT_MS = 25000;
     const map = new Map<string, VisitorPerson>();
 
-    // Group events by client IP
-    const eventsByIp = new Map<string, LogEvent[]>();
+    // Group events by distinct client device
+    // Ensures multiple devices on the same WiFi router (which share one public IP)
+    // each get their own separate active visitor card!
+    const eventsByDevice = new Map<string, LogEvent[]>();
     list.forEach((event) => {
       const ip = (event.sourceIp || '127.0.0.1').trim();
-      const group = eventsByIp.get(ip) || [];
+      const dev = (event.clientGeo?.device || this.parseDeviceFromUserAgent(event.userAgent) || 'Device').trim();
+      const vid = event.clientGeo?.visitorId || '';
+      const deviceKey = vid ? `${ip}::${vid}` : `${ip}::${dev}`;
+      const group = eventsByDevice.get(deviceKey) || [];
       group.push(event);
-      eventsByIp.set(ip, group);
+      eventsByDevice.set(deviceKey, group);
     });
 
-    eventsByIp.forEach((events, ip) => {
-      // Sort newest to oldest for this IP
+    eventsByDevice.forEach((events, deviceKey) => {
+      // Sort newest to oldest for this device
       events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
       const latestEvent = events[0];
       const oldestEvent = events[events.length - 1];
+      const ip = (latestEvent.sourceIp || '127.0.0.1').trim();
       const isSim = events.some((e) => e.flagReason?.includes('Simulated') || e.payloadSnippet?.includes('simulator'));
 
-      // Find the most recent SESSION_END event for this IP
+      // Find the most recent SESSION_END event for this device
       const sessionEndEvent = events.find((e) => e.eventType === 'SESSION_END');
 
       // Find the most recent active user interaction (pageview, heartbeat, click, authentication)
@@ -334,7 +340,8 @@ class SecurityStore {
         leftAt = sessionEndEvent?.timestamp || (latestActiveEvent ? latestActiveEvent.timestamp : latestEvent.timestamp);
       }
 
-      map.set(ip, {
+      map.set(deviceKey, {
+        id: deviceKey,
         ip,
         device: latestEvent.clientGeo?.device || this.parseDeviceFromUserAgent(latestEvent.userAgent),
         country: latestEvent.clientGeo?.country,

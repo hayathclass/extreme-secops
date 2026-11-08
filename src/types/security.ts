@@ -44,6 +44,7 @@ export interface LogEvent {
     country?: string;
     city?: string;
     device?: string;
+    visitorId?: string;
   };
   probeDetails?: {
     protocol?: string;
@@ -137,6 +138,7 @@ export interface Target {
 }
 
 export interface VisitorPerson {
+  id?: string;
   ip: string;
   device: string;
   country?: string;

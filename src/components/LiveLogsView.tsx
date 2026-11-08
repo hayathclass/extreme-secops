@@ -398,7 +398,7 @@ export const LiveLogsView: React.FC<LiveLogsViewProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
             {visitorPersons.map((person, idx) => (
               <div
-                key={person.ip}
+                key={person.id || `${person.ip}-${person.device}-${idx}`}
                 className={`bg-slate-900/90 border rounded-xl p-3.5 space-y-2.5 transition shadow-md relative overflow-hidden ${
                   person.isOnline ? 'border-slate-800 hover:border-emerald-500/50 shadow-emerald-950/20' : 'border-slate-800/60 opacity-80 hover:opacity-100'
                 }`}

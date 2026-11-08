@@ -46,36 +46,12 @@ class SecurityStore {
   private initDefaultData() {
     const defaultSites = [
       {
-        id: 'target-google',
-        name: 'Google Web Services',
-        url: 'https://www.google.com',
-        hostname: 'www.google.com',
-        serverBanner: 'gws',
-        lastProbeLatencyMs: 38,
-      },
-      {
-        id: 'target-aws',
-        name: 'Amazon Web Services (AWS)',
-        url: 'https://aws.amazon.com',
-        hostname: 'aws.amazon.com',
-        serverBanner: 'CloudFront',
-        lastProbeLatencyMs: 48,
-      },
-      {
-        id: 'target-cloudflare',
-        name: 'Cloudflare Edge Infrastructure',
-        url: 'https://www.cloudflare.com',
-        hostname: 'www.cloudflare.com',
-        serverBanner: 'cloudflare',
-        lastProbeLatencyMs: 22,
-      },
-      {
-        id: 'target-github',
-        name: 'GitHub Infrastructure',
-        url: 'https://github.com',
-        hostname: 'github.com',
-        serverBanner: 'GitHub.com',
-        lastProbeLatencyMs: 65,
+        id: 'target-atc-simulator',
+        name: 'ATC Online Simulator',
+        url: 'https://atc-onlinesimulator.onrender.com',
+        hostname: 'atc-onlinesimulator.onrender.com',
+        serverBanner: 'Render / Cloudflare',
+        lastProbeLatencyMs: 42,
       },
     ];
 

@@ -379,7 +379,7 @@ async function createServer() {
  */
 (function() {
   var scriptTag = document.currentScript;
-  var targetId = (scriptTag && (scriptTag.getAttribute('data-target-id') || scriptTag.getAttribute('data-site-id'))) || 'target-prod-site';
+  var targetId = (scriptTag && (scriptTag.getAttribute('data-target-id') || scriptTag.getAttribute('data-site-id'))) || 'target-atc-simulator';
   var apiKey = (scriptTag && scriptTag.getAttribute('data-api-key')) || '';
   var ingestUrl = '${baseUrl}/api/collector/ingest';
   var cachedClientIp = '';
@@ -1031,7 +1031,7 @@ async function createServer() {
 
       const event: RealEvent = {
         id: `log-${Date.now().toString(36)}-${idx}`,
-        targetId: targetId || 'target-real-site',
+        targetId: targetId || 'target-atc-simulator',
         timestamp,
         displayTime: new Date(timestamp).toTimeString().slice(0, 8),
         method,
@@ -1300,7 +1300,7 @@ async function createServer() {
       deviceType = 'API Client';
     }
 
-    const targetId = body.targetId || (req.headers['x-target-id'] as string) || 'target-real-site';
+    const targetId = body.targetId || (req.headers['x-target-id'] as string) || 'target-atc-simulator';
     const method = (body.method || 'GET').toUpperCase();
     const endpoint = body.endpoint || body.path || '/';
     const status = typeof body.status === 'number' ? body.status : 200;
@@ -1368,7 +1368,7 @@ async function createServer() {
     let list = realEventsBuffer;
 
     if (targetId && !all) {
-      list = list.filter((e) => e.targetId === targetId || e.targetId === 'target-real-site' || e.targetId === 'target-prod-site');
+      list = list.filter((e) => e.targetId === targetId || e.targetId === 'target-atc-simulator' || e.targetId === 'target-real-site' || e.targetId === 'target-prod-site');
     }
     if (since) {
       const sinceTime = new Date(since).getTime();
@@ -1387,7 +1387,7 @@ async function createServer() {
     const targetId = req.query.targetId as string;
     let list = realEventsBuffer.filter((e) => e.logSource === 'REAL_LIVE_INGEST');
     if (targetId) {
-      list = list.filter((e) => e.targetId === targetId || e.targetId === 'target-real-site' || e.targetId === 'target-prod-site');
+      list = list.filter((e) => e.targetId === targetId || e.targetId === 'target-atc-simulator' || e.targetId === 'target-real-site' || e.targetId === 'target-prod-site');
     }
 
     const visitorMap = new Map<string, any>();
@@ -1529,7 +1529,7 @@ async function createServer() {
     const { targetId } = req.body || {};
     if (targetId) {
       for (let i = realEventsBuffer.length - 1; i >= 0; i--) {
-        if (realEventsBuffer[i].targetId === targetId || realEventsBuffer[i].targetId === 'target-real-site' || realEventsBuffer[i].targetId === 'target-prod-site') {
+        if (realEventsBuffer[i].targetId === targetId || realEventsBuffer[i].targetId === 'target-atc-simulator' || realEventsBuffer[i].targetId === 'target-real-site' || realEventsBuffer[i].targetId === 'target-prod-site') {
           realEventsBuffer.splice(i, 1);
         }
       }

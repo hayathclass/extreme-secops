@@ -235,6 +235,13 @@ export interface SecurityReport {
   recentEvidenceLogs: LogEvent[];
 }
 
+export interface AnalystCodePatch {
+  filename: string;
+  language: string;
+  code: string;
+  description: string;
+}
+
 export interface AnalystMessage {
   id: string;
   sender: 'user' | 'analyst';
@@ -244,6 +251,9 @@ export interface AnalystMessage {
     observed: string[];
     inferred: string[];
     recommended: string[];
+    codePatch?: AnalystCodePatch;
+    mitigationSteps?: string[];
+    verificationCurl?: string;
   };
   insufficientEvidence?: boolean;
 }

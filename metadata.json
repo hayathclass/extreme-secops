@@ -1,0 +1,6 @@
+{
+  "name": "EXTREME",
+  "description": "Production-grade security event monitoring, threat detection, incident analysis, and remediation guidance for authorized web applications.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

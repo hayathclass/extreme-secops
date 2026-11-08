@@ -1,0 +1,262 @@
+import React, { useState } from 'react';
+import { Target } from '../types/security';
+import {
+  ShieldAlert,
+  Activity,
+  Terminal,
+  AlertTriangle,
+  FolderGit2,
+  Wrench,
+  Bot,
+  FileText,
+  PlusCircle,
+  ChevronDown,
+  UploadCloud,
+  Globe,
+  Radio,
+} from 'lucide-react';
+
+interface HeaderProps {
+  currentTab: string;
+  setCurrentTab: (tab: string) => void;
+  targets: Target[];
+  selectedTarget: Target | null;
+  onSelectTarget: (target: Target) => void;
+  onOpenConnectModal: () => void;
+  onOpenUploadModal: () => void;
+  logCount?: number;
+  threatCount?: number;
+  incidentCount?: number;
+  isStreaming?: boolean;
+}
+
+export const Header: React.FC<HeaderProps> = ({
+  currentTab,
+  setCurrentTab,
+  targets,
+  selectedTarget,
+  onSelectTarget,
+  onOpenConnectModal,
+  onOpenUploadModal,
+  logCount = 0,
+  threatCount = 0,
+  incidentCount = 0,
+  isStreaming = true,
+}) => {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  return (
+    <header className="sticky top-0 z-40 bg-[#090d14]/95 backdrop-blur-md border-b border-slate-800/80">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          {/* Brand Logo & Name */}
+          <div className="flex items-center space-x-3 sm:space-x-5">
+            <div
+              className="flex items-center space-x-2.5 cursor-pointer group"
+              onClick={() => setCurrentTab('dashboard')}
+            >
+              <div className="w-9 h-9 rounded-lg bg-cyan-950/80 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shadow-sm shadow-cyan-900/30 group-hover:border-cyan-400 transition">
+                <ShieldAlert className="w-5 h-5 text-cyan-400" />
+              </div>
+              <div>
+                <div className="flex items-baseline space-x-2">
+                  <span className="text-lg font-extrabold tracking-wider text-slate-100 font-mono">
+                    EXTREME
+                  </span>
+                  <span className="text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-400 font-bold border border-cyan-700/50">
+                    SEC-OPS
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 font-normal tracking-wide hidden sm:block">
+                  Monitor. Detect. Understand. Respond.
+                </p>
+              </div>
+            </div>
+
+            {/* Target Selector Dropdown */}
+            {selectedTarget && (
+              <div className="relative pl-3 sm:pl-4 border-l border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                  className="flex items-center space-x-2 px-2.5 py-1.5 rounded-md bg-slate-900/90 border border-slate-700/80 hover:border-slate-600 transition text-left"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">
+                      TARGET
+                    </span>
+                    <span className="text-xs font-mono font-medium text-slate-200 truncate max-w-[140px] sm:max-w-[180px]">
+                      {selectedTarget.hostname}
+                    </span>
+                  </div>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 ml-1" />
+                </button>
+
+                {dropdownOpen && (
+                  <div className="absolute left-3 sm:left-4 mt-1.5 w-72 rounded-lg bg-[#0f172a] border border-slate-700 shadow-2xl shadow-black/80 py-1.5 z-50 animate-fade-in font-sans">
+                    <div className="px-3 py-1.5 border-b border-slate-800 text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                      Select Monitored Website
+                    </div>
+                    {targets.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => {
+                          onSelectTarget(t);
+                          setDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-800/80 transition ${
+                          t.id === selectedTarget.id
+                            ? 'bg-cyan-950/50 text-cyan-300 font-medium'
+                            : 'text-slate-300'
+                        }`}
+                      >
+                        <span className="font-mono truncate">{t.hostname}</span>
+                        <span
+                          className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold ${
+                            t.isLab
+                              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                              : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                          }`}
+                        >
+                          {t.isLab ? 'DEMO' : 'REAL'}
+                        </span>
+                      </button>
+                    ))}
+                    <div className="border-t border-slate-800 mt-1 pt-1 px-2 space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onOpenConnectModal();
+                          setDropdownOpen(false);
+                        }}
+                        className="w-full text-left px-2 py-1.5 text-xs text-cyan-400 hover:bg-slate-800/80 rounded flex items-center space-x-1.5"
+                      >
+                        <PlusCircle className="w-3.5 h-3.5" />
+                        <span>Connect New Website</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Right Status Badges & Action Buttons */}
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            {selectedTarget && (
+              <>
+                {/* Target Status indicator */}
+                <div className="hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-xs">
+                  <span
+                    className={`inline-block w-2 h-2 rounded-full ${
+                      isStreaming ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'
+                    }`}
+                  />
+                  <span className="text-[11px] font-mono uppercase tracking-wide text-slate-300">
+                    {isStreaming ? 'MONITORING' : 'PAUSED'}
+                  </span>
+                </div>
+
+                {/* Real Data vs Demo Badge */}
+                <div
+                  className={`px-2.5 py-1 rounded text-xs font-mono font-bold tracking-wider flex items-center space-x-1.5 border ${
+                    selectedTarget.isLab
+                      ? 'bg-amber-950/30 border-amber-500/40 text-amber-400'
+                      : 'bg-emerald-950/30 border-emerald-500/40 text-emerald-400'
+                  }`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      selectedTarget.isLab ? 'bg-amber-400' : 'bg-emerald-400'
+                    }`}
+                  />
+                  <span className="text-[11px]">
+                    {selectedTarget.isLab ? 'DEMO ENVIRONMENT' : 'REAL TELEMETRY'}
+                  </span>
+                </div>
+              </>
+            )}
+
+            {/* Primary Action 1: Upload Website */}
+            <button
+              type="button"
+              onClick={onOpenUploadModal}
+              title="Upload website ZIP, source files, or server logs"
+              className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white flex items-center space-x-1.5 transition shadow-md shadow-cyan-950/60 border border-cyan-400/40"
+            >
+              <UploadCloud className="w-4 h-4 text-white" />
+              <span>Upload Website</span>
+            </button>
+
+            {/* Primary Action 2: Connect / Audit URL */}
+            <button
+              type="button"
+              onClick={onOpenConnectModal}
+              title="Connect an authorized website domain or probe live security headers"
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+            >
+              <Globe className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Connect / Audit URL</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="flex space-x-1 overflow-x-auto py-1 scrollbar-none border-t border-slate-800/60">
+          {[
+            { id: 'dashboard', label: 'Dashboard', icon: Activity, count: null },
+            { id: 'noc', label: 'Live NOC Watchdog', icon: Radio, count: null, isLive: true },
+            { id: 'logs', label: 'Live Logs', icon: Terminal, count: logCount },
+            {
+              id: 'threats',
+              label: 'Threats & Alerts',
+              icon: AlertTriangle,
+              count: threatCount,
+              alert: threatCount > 0,
+            },
+            { id: 'incidents', label: 'Incidents', icon: FolderGit2, count: incidentCount },
+            { id: 'remediation', label: 'Remediation', icon: Wrench, count: null },
+            { id: 'analyst', label: 'Extreme Analyst', icon: Bot, count: null },
+            { id: 'report', label: 'Report', icon: FileText, count: null },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const active = currentTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setCurrentTab(tab.id)}
+                className={`flex items-center space-x-2 px-3 py-2 text-xs font-semibold rounded-t-md transition whitespace-nowrap border-b-2 ${
+                  active
+                    ? 'border-cyan-500 text-cyan-400 bg-cyan-950/20'
+                    : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 ${active ? 'text-cyan-400' : 'text-slate-400'}`} />
+                <span>{tab.label}</span>
+                {tab.isLive && (
+                  <span className="flex h-2 w-2 relative ml-0.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                )}
+                {tab.count !== null && tab.count !== undefined && (
+                  <span
+                    className={`ml-1 text-[10px] px-1.5 py-0.2 rounded font-mono font-bold ${
+                      tab.alert
+                        ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
+                        : 'bg-slate-800 text-slate-300'
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </header>
+  );
+};
